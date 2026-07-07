@@ -1,8 +1,9 @@
 # Roadmap
 
-This roadmap is driven by [`feature-list.csv`](feature-list.csv), not the
-other way around. Each row there tracks a feature's status, competitor
-reference, vision fit, and test plan. See
+This roadmap is driven by `feature-list.csv`, not the other way around.
+That file is a local, agent-only backlog sheet (gitignored, not published in
+this repo) that tracks each feature's status, competitor reference, vision
+fit, and test plan. See
 [`.cursor/skills/corticore-feature-builder/SKILL.md`](.cursor/skills/corticore-feature-builder/SKILL.md)
 for the workflow agents follow to move a row from idea to done.
 
