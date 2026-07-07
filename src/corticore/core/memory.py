@@ -79,11 +79,22 @@ class Memory:
         )
         return memory_id
 
-    def recall(self, query: str, k: Optional[int] = None) -> list[RecallResult]:
-        """Return the `k` most relevant, decay-adjusted memories for `query`."""
+    def recall(
+        self,
+        query: str,
+        k: Optional[int] = None,
+        filters: Optional[dict[str, Any]] = None,
+    ) -> list[RecallResult]:
+        """Return the `k` most relevant, decay-adjusted memories for `query`.
+
+        `filters` narrows candidates to memories whose `metadata` matches
+        every key/value pair exactly (e.g. `{"user_id": "abc"}`), applied
+        before scoring. Omitting it searches across all memories, matching
+        prior behavior exactly.
+        """
         now = time.time()
         items = self.store.all()
-        results = retrieve(query, items, self.embedder, self.config, k=k, now=now)
+        results = retrieve(query, items, self.embedder, self.config, k=k, now=now, filters=filters)
 
         for result in results:
             item = self.store.get(result.id)

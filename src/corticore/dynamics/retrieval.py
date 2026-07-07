@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import time
+from typing import Any, Optional
 
 from corticore.core.config import Config
 from corticore.core.types import MemoryItem, MemoryStatus, RecallResult
@@ -31,6 +32,17 @@ def keyword_score(query: str, text: str) -> float:
     return len(overlap) / len(q_tokens)
 
 
+def matches_filters(item: MemoryItem, filters: Optional[dict[str, Any]]) -> bool:
+    """True if `item.metadata` has every key/value pair in `filters` (exact match).
+
+    An empty or `None` `filters` always matches, so filtering is strictly
+    opt-in and existing unfiltered callers see no behavior change.
+    """
+    if not filters:
+        return True
+    return all(item.metadata.get(key) == value for key, value in filters.items())
+
+
 def retrieve(
     query: str,
     items: list[MemoryItem],
@@ -38,8 +50,9 @@ def retrieve(
     config: Config,
     k: int | None = None,
     now: float | None = None,
+    filters: Optional[dict[str, Any]] = None,
 ) -> list[RecallResult]:
-    """Rank active memories against `query` and return the top `k`."""
+    """Rank active memories matching `filters` against `query`, return top `k`."""
     now = now if now is not None else time.time()
     k = k if k is not None else config.retrieval.default_k
     query_vec = embedder.embed(query)
@@ -47,6 +60,8 @@ def retrieve(
     scored: list[RecallResult] = []
     for item in items:
         if item.status != MemoryStatus.ACTIVE:
+            continue
+        if not matches_filters(item, filters):
             continue
         kw = keyword_score(query, item.text)
         sim = cosine_similarity(query_vec, item.embedding)

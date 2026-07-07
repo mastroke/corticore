@@ -30,6 +30,34 @@ def test_recall_finds_relevant_memory(mem):
     assert any("Priya" in r.text for r in results)
 
 
+def test_recall_with_filters_scopes_to_matching_metadata(mem):
+    mem.remember("Alice likes dark mode", metadata={"user_id": "alice"})
+    mem.remember("Bob likes light mode", metadata={"user_id": "bob"})
+
+    results = mem.recall("likes mode", filters={"user_id": "alice"})
+
+    assert results
+    assert all(r.metadata.get("user_id") == "alice" for r in results)
+
+
+def test_recall_with_filters_excludes_non_matching_even_if_relevant(mem):
+    mem.remember("Bob likes light mode", metadata={"user_id": "bob"})
+
+    results = mem.recall("likes mode", filters={"user_id": "alice"})
+
+    assert results == []
+
+
+def test_recall_without_filters_is_unaffected_by_metadata(mem):
+    mem.remember("Alice likes dark mode", metadata={"user_id": "alice"})
+    mem.remember("Bob likes light mode", metadata={"user_id": "bob"})
+
+    results = mem.recall("likes mode")
+
+    user_ids = {r.metadata.get("user_id") for r in results}
+    assert {"alice", "bob"} <= user_ids
+
+
 def test_recall_respects_k(mem):
     for i in range(10):
         mem.remember(f"fact number {i} about testing")
