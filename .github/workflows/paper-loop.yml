@@ -1,0 +1,38 @@
+name: Paper loop
+
+# Detects new agent-memory papers and, only when there's something new to
+# review, launches a Cursor cloud agent to run the review -> implement ->
+# eval -> PR loop autonomously. Never pushes to the default branch directly -
+# see research/design/adr/0005-scheduled-cloud-agent-research-loop.md.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  check-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install corticore with orchestration extras
+        run: pip install -e ".[dev,orchestrate]"
+
+      - name: Check for new papers
+        id: check
+        run: python orchestrate/check_new_papers.py
+
+      - name: Launch cloud agent (only if new papers found)
+        if: steps.check.outputs.has_new == 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: python orchestrate/run_cloud_agent.py
+
+      - name: No new papers
+        if: steps.check.outputs.has_new != 'true'
+        run: echo "No new papers at or after the 2026-01 cutoff - nothing to review this run."

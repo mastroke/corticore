@@ -1,0 +1,89 @@
+# Tracked literature for corticore.
+#
+# Source list: https://github.com/Shichun-Liu/Agent-Memory-Paper-List
+# Survey: "Memory in the Age of AI Agents" (arXiv:2512.13564)
+#
+# Each entry links a paper to the distilled note and (if it drove a decision)
+# the ADR that resulted. `status` is one of:
+#   unreviewed   - queued, not yet read
+#   noted        - distilled into research/notes/
+#   adopted      - influenced code, linked via `adr`
+#   deferred      - reviewed, deliberately not adopted yet (see note for why)
+#
+# New papers from the source list should be appended here first; nothing
+# gets implemented without an entry here and a note in research/notes/.
+
+- id: "2601.03192"
+  title: "MemRL: Self-Evolving Agents via Runtime Reinforcement Learning on Episodic Memory"
+  date: "2026-01"
+  taxonomy: [experiential, working, evolution]
+  url: "https://arxiv.org/abs/2601.03192"
+  status: noted
+  note: "research/notes/2601.03192-memrl.md"
+  adr: null
+
+- id: "2601.04726"
+  title: "Memory Matters More: Event-Centric Memory as a Logic Map for Agent Searching and Reasoning"
+  date: "2026-01"
+  taxonomy: [factual, token-level]
+  url: "https://www.arxiv.org/abs/2601.04726"
+  status: noted
+  note: "research/notes/2601.04726-compassmem.md"
+  adr: null
+
+- id: "2601.03236"
+  title: "MAGMA: A Multi-Graph based Agentic Memory Architecture for AI Agents"
+  date: "2026-01"
+  taxonomy: [factual, token-level]
+  url: "https://arxiv.org/abs/2601.03236"
+  status: noted
+  note: "research/notes/2601.03236-magma.md"
+  adr: null
+
+- id: "2601.02163"
+  title: "EverMemOS: A Self-Organizing Memory Operating System for Structured Long-Horizon Reasoning"
+  date: "2026-01"
+  taxonomy: [factual, token-level]
+  url: "https://www.arxiv.org/abs/2601.02163"
+  status: adopted
+  note: "research/notes/2601.02163-evermemos.md"
+  adr: "research/design/adr/0003-time-bounded-foresight-memories.md"
+
+- id: "2601.01885"
+  title: "Agentic Memory: Learning Unified Long-Term and Short-Term Memory Management for Large Language Model Agents"
+  date: "2026-01"
+  taxonomy: [working, token-level]
+  url: "https://arxiv.org/abs/2601.01885"
+  status: noted
+  note: "research/notes/2601.01885-agentic-memory.md"
+  adr: null
+
+# Foundational papers referenced directly by v0.1's design (predate the
+# Jan-2026 cutoff but anchor decisions already made).
+
+- id: "2504.19413"
+  title: "Mem0: Building production-ready ai agents with scalable long-term memory"
+  date: "2025-04"
+  taxonomy: [factual, token-level]
+  url: "https://arxiv.org/abs/2504.19413"
+  status: adopted
+  note: null
+  adr: "research/design/adr/0001-zero-setup-sqlite-default.md"
+
+- id: "2310.03052"
+  title: "Memoria: Resolving Fateful Forgetting Problem through Human-Inspired Memory Architecture"
+  date: "2023-10"
+  taxonomy: [latent, evolution]
+  url: "https://arxiv.org/abs/2310.03052"
+  status: adopted
+  note: null
+  adr: "research/design/adr/0002-forgetting-first.md"
+
+- id: "2512.12818"
+  title: "Hindsight is 20/20: Building Agent Memory that Retains, Recalls, and Reflects"
+  date: "2025-12"
+  taxonomy: [factual, experiential, evolution]
+  url: "https://arxiv.org/abs/2512.12818"
+  status: adopted
+  note: null
+  adr: "research/design/adr/0002-forgetting-first.md"

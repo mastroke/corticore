@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "corticore"
+version = "0.1.0"
+description = "A zero-setup, forgetting-first, fully-inspectable memory layer for AI agents."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Masoob Alam" }]
+keywords = ["agents", "ai", "memory", "long-term-memory", "llm", "rag"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Libraries",
+]
+dependencies = []
+
+[project.optional-dependencies]
+st = ["sentence-transformers>=2.2"]
+openai = ["openai>=1.0"]
+postgres = ["psycopg[binary]>=3.1"]
+dev = ["pytest>=7.0"]
+orchestrate = ["cursor-sdk>=0.1", "pyyaml>=6.0"]
+
+[project.urls]
+Homepage = "https://github.com/mastroke/corticore"
+Repository = "https://github.com/mastroke/corticore"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/corticore"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
