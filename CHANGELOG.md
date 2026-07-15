@@ -7,6 +7,11 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Semantic embedder benchmark (`F004`): `eval/benchmark_embedders.py` compares
+  the default `LocalEmbedder` with `SentenceTransformerEmbedder` on the eval
+  dataset; `harness.run()` now accepts an `embedder`. Measured result recorded
+  in `eval/BASELINE.md`: semantic embeddings reach recall@3 = 5/5 vs the
+  lexical baseline's 4/5, closing the paraphrase gap.
 - Observability hooks (`F008`): an optional `on_event` callback on `Memory`
   receives every recorded `TraceEvent` (including events emitted inside
   `reflect()`) for logging/metrics/tracing. Callback exceptions are isolated
