@@ -49,18 +49,24 @@ class Memory:
         text: str,
         metadata: Optional[dict[str, Any]] = None,
         expires_at: Optional[float] = None,
+        namespace: str = "default",
     ) -> str:
         """Store a new memory and return its id.
 
         `expires_at` is an optional epoch-seconds deadline (EverMemOS-style
         "Foresight" signal, see ADR 0003): once passed, `reflect()` forgets
         this memory regardless of how recently or often it's been recalled.
+
+        `namespace` isolates this memory to a logical partition (e.g. a user
+        or agent id). Memories in different namespaces never surface in each
+        other's `recall()` results. Defaults to `"default"`.
         """
         now = time.time()
         memory_id = uuid.uuid4().hex
         item = MemoryItem(
             id=memory_id,
             text=text,
+            namespace=namespace,
             metadata=metadata or {},
             embedding=self.embedder.embed(text),
             created_at=now,
