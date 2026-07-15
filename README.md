@@ -198,6 +198,40 @@ mem.recall("theme preference", namespace=None)      # search every namespace
 `namespace` defaults to `"default"`, so existing single-tenant code keeps
 working unchanged.
 
+## Postgres backend
+
+For multi-writer / production deployments, use the optional Postgres store
+instead of the default SQLite file:
+
+```bash
+pip install corticore[postgres]
+```
+
+```python
+from corticore import Memory
+from corticore.stores.postgres_store import PostgresStore
+
+mem = Memory(store=PostgresStore("postgresql://user:pass@host/db"))
+```
+
+`PostgresStore` pools connections (`min_size`/`max_size`) and retries transient
+connection, serialization, and deadlock errors with exponential backoff, so it
+holds up under concurrent writers.
+
+### Running the Postgres integration tests
+
+The integration tests are skipped unless a database is reachable. To run them
+locally with Docker:
+
+```bash
+pip install corticore[postgres]
+# Docker running: a throwaway postgres:16-alpine container is managed for you
+pytest tests/test_postgres_integration.py
+
+# ...or point at an existing database instead of Docker:
+CORTICORE_TEST_PG_DSN=postgresql://user:pass@host/db pytest tests/test_postgres_integration.py
+```
+
 ## Schema migrations
 
 The default SQLite store versions its schema with SQLite's built-in

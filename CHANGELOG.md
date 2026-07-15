@@ -7,6 +7,13 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Postgres store hardening (`F009`): `PostgresStore` now pools connections
+  (`min_size`/`max_size`) and retries transient connection, serialization, and
+  deadlock errors with exponential backoff. Its schema gained the `namespace`
+  column for parity with SQLite (auto-migrated via `ADD COLUMN IF NOT EXISTS`).
+  Adds Docker-based integration tests (CRUD + concurrent writes) that skip when
+  no database is reachable; the `postgres` extra now includes the connection
+  pool.
 - Semantic embedder benchmark (`F004`): `eval/benchmark_embedders.py` compares
   the default `LocalEmbedder` with `SentenceTransformerEmbedder` on the eval
   dataset; `harness.run()` now accepts an `embedder`. Measured result recorded
