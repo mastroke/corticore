@@ -14,7 +14,9 @@ swapping in LoCoMo/LongMemEval later doesn't change this file's shape.
 
 from __future__ import annotations
 
+import argparse
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -112,15 +114,65 @@ def run(dataset: Dataset, k: int = 3, embedder: Embedder | None = None) -> dict[
     }
 
 
-def main() -> int:
-    dataset = _synthetic_dataset()
-    result = run(dataset)
+def _load_squad_dataset(limit: int, split: str) -> Dataset:
+    """Load the real Hugging Face SQuAD dataset via eval/datasets/squad.py.
+
+    Kept out of module import time so the default synthetic run never needs the
+    optional `hf` extra or a network connection.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "datasets"))
+    from squad import load_squad  # noqa: E402
+
+    return load_squad(limit=limit, split=split)
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="corticore evaluation harness")
+    parser.add_argument(
+        "--dataset",
+        choices=["synthetic", "squad"],
+        default="synthetic",
+        help="which dataset to evaluate (default: synthetic, the built-in "
+        "zero-dependency one). 'squad' pulls a real Hugging Face dataset and "
+        "needs the 'hf' extra: pip install corticore[hf]",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="max rows to load for real datasets like squad (default: 100)",
+    )
+    parser.add_argument(
+        "--split",
+        default="validation",
+        help="dataset split for real datasets like squad (default: validation)",
+    )
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=3,
+        help="recall@k cutoff (default: 3)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+
+    if args.dataset == "squad":
+        dataset = _load_squad_dataset(limit=args.limit, split=args.split)
+    else:
+        dataset = _synthetic_dataset()
+
+    result = run(dataset, k=args.k)
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = RESULTS_DIR / f"{dataset.name}-{int(time.time())}.json"
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", dataset.name.split()[0]).strip("-")
+    out_path = RESULTS_DIR / f"{slug}-{int(time.time())}.json"
     out_path.write_text(json.dumps(result, indent=2))
 
     print(f"[corticore eval] dataset={dataset.name}")
+    print(f"[corticore eval] facts={result['facts_remembered']} queries={result['recall_at_k']['total']}")
     print(
         f"[corticore eval] recall@{result['recall_at_k']['k']} = "
         f"{result['recall_at_k']['hits']}/{result['recall_at_k']['total']} "

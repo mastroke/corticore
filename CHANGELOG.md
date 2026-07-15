@@ -7,6 +7,15 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Real Hugging Face dataset evaluation: `eval/datasets/squad.py` loads SQuAD
+  v1.1 (`rajpurkar/squad`) into the harness's `(facts, queries,
+  expects_substring)` shape, and `eval/harness.py` gained
+  `--dataset {synthetic,squad}` plus `--limit/--split/--k` flags. The split is
+  shuffled with a fixed seed for a representative distractor pool. Needs the
+  new optional `hf` extra (`pip install corticore[hf]`, installs `datasets`);
+  the synthetic default stays zero-dependency and offline. Baseline recorded in
+  `eval/BASELINE.md` (recall@3 = 292/493 on 500 shuffled validation rows with
+  the default `LocalEmbedder`).
 - CLI inspection tool (`F010`): a `corticore` console command with
   `list`, `recall`, `why`, and `reflect` subcommands for inspecting a memory
   store from the shell. Registered via `project.scripts`.

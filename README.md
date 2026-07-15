@@ -120,6 +120,34 @@ python orchestrate/check_new_papers.py           # real network check, no API ke
 python orchestrate/run_cloud_agent.py --dry-run  # prints the prompt, doesn't launch anything
 ```
 
+## Evaluation
+
+`eval/harness.py` scores corticore end-to-end: it stores a dataset's facts,
+runs `reflect()`, then checks whether `recall()` returns the right memory for
+each query. It ships with a tiny zero-dependency synthetic dataset so it runs
+with no external data:
+
+```bash
+PYTHONPATH=src python eval/harness.py            # built-in synthetic dataset
+```
+
+To evaluate against a **real Hugging Face dataset**, install the optional `hf`
+extra and pass `--dataset squad` (SQuAD v1.1, `rajpurkar/squad`). Each context
+paragraph is split into sentences and stored as memories; each question
+becomes a recall query expecting its gold answer span:
+
+```bash
+pip install corticore[hf]                                   # installs `datasets`
+PYTHONPATH=src python eval/harness.py --dataset squad --limit 500
+```
+
+The split is shuffled with a fixed seed so the sample spans many articles,
+giving a realistic pool of distractor memories. Results (and the checked-in
+baseline) live in [`eval/BASELINE.md`](eval/BASELINE.md). Real datasets plug
+into the same `(facts, queries, expects_substring)` shape as the synthetic
+one, so adding LoCoMo/LongMemEval-style loaders later only means dropping a new
+module in [`eval/datasets/`](eval/datasets/).
+
 ## Observability
 
 Pass an `on_event` callback to receive every trace event corticore records

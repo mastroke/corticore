@@ -24,6 +24,7 @@ dependencies = []
 st = ["sentence-transformers>=2.2"]
 openai = ["openai>=1.0"]
 postgres = ["psycopg[binary,pool]>=3.1"]
+hf = ["datasets>=2.0"]
 dev = ["pytest>=7.0"]
 orchestrate = ["cursor-sdk>=0.1", "pyyaml>=6.0"]
 

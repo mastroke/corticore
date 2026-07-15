@@ -24,7 +24,15 @@ Non-obvious caveats:
 - **Eval harness needs `PYTHONPATH=src`**: run it as
   `PYTHONPATH=src .venv/bin/python eval/harness.py`. It is not exposed as a
   console script. Compare its `recall@3` against the last row of
-  `eval/BASELINE.md` (baseline is 4/5 with the default lexical embedder).
+  `eval/BASELINE.md` (synthetic baseline is 4/5 with the default lexical
+  embedder).
+- **Real Hugging Face dataset eval is opt-in**: `--dataset squad` loads SQuAD
+  v1.1 via `eval/datasets/squad.py` and requires the `hf` extra
+  (`.venv/bin/python -m pip install -e ".[hf]"`, installs `datasets`) plus
+  network access on first run (then HF-cached). It is intentionally not in the
+  default dev install to keep startup light and the default path zero-dep;
+  `tests/test_eval_squad.py` skips when `datasets`/network is unavailable. A
+  `--limit 500` run scans thousands of memories and takes a couple of minutes.
 - **8 tests skip by design**: the optional extras `st`
   (sentence-transformers), `openai`, `postgres`, and `orchestrate`
   (cursor-sdk/pyyaml) are not installed by the default dev setup, so their
