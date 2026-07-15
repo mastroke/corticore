@@ -16,3 +16,6 @@ eval/results/*.json
 .DS_Store
 .env
 orchestrate/.new_papers.json
+
+# Local agent-only backlog tracking sheet; not part of the published repo.
+feature-list.csv
