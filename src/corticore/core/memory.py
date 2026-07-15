@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from pathlib import Path
 from typing import Any, Optional
 
 from corticore.core.config import Config
@@ -195,6 +194,23 @@ class Memory:
             for item in items:
                 fh.write(json.dumps(_item_to_dict(item), ensure_ascii=False) + "\n")
         return len(items)
+
+    def import_jsonl(self, path: str) -> int:
+        """Load memories from a JSON Lines `path` into this store; return count.
+
+        Each line is a memory produced by `export_jsonl`. Existing memories
+        with the same id are overwritten (the store's `put` is an upsert), so
+        re-importing is idempotent. Blank lines are ignored.
+        """
+        count = 0
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                self.store.put(_item_from_dict(json.loads(line)))
+                count += 1
+        return count
 
     def close(self) -> None:
         self.store.close()
