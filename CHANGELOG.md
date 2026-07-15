@@ -7,6 +7,9 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- CLI inspection tool (`F010`): a `corticore` console command with
+  `list`, `recall`, `why`, and `reflect` subcommands for inspecting a memory
+  store from the shell. Registered via `project.scripts`.
 - Postgres store hardening (`F009`): `PostgresStore` now pools connections
   (`min_size`/`max_size`) and retries transient connection, serialization, and
   deadlock errors with exponential backoff. Its schema gained the `namespace`
