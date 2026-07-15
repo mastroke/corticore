@@ -16,9 +16,11 @@ from typing import Any, Optional
 
 from corticore.core.config import Config
 from corticore.core.types import (
+    MEMORY_TYPE_KEY,
     ConsolidationReport,
     MemoryItem,
     MemoryStatus,
+    MemoryType,
     RecallResult,
     Trace,
     TraceEvent,
@@ -94,6 +96,7 @@ class Memory:
         metadata: Optional[dict[str, Any]] = None,
         expires_at: Optional[float] = None,
         namespace: str = "default",
+        memory_type: Optional[str] = None,
     ) -> str:
         """Store a new memory and return its id.
 
@@ -104,14 +107,24 @@ class Memory:
         `namespace` isolates this memory to a logical partition (e.g. a user
         or agent id). Memories in different namespaces never surface in each
         other's `recall()` results. Defaults to `"default"`.
+
+        `memory_type` optionally tags the memory's cognitive category (see
+        `MemoryType`: semantic/episodic/procedural). It is stored under
+        `metadata["memory_type"]`, so it is filterable via
+        `recall(filters={"memory_type": ...})`.
         """
         now = time.time()
         memory_id = uuid.uuid4().hex
+        metadata = dict(metadata or {})
+        if memory_type is not None:
+            metadata[MEMORY_TYPE_KEY] = (
+                memory_type.value if isinstance(memory_type, MemoryType) else memory_type
+            )
         item = MemoryItem(
             id=memory_id,
             text=text,
             namespace=namespace,
-            metadata=metadata or {},
+            metadata=metadata,
             embedding=self.embedder.embed(text),
             created_at=now,
             last_accessed_at=now,
