@@ -7,6 +7,9 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- SQLite schema migrations (`F003`): the default store tracks its schema
+  version via `PRAGMA user_version` and applies ordered, idempotent
+  migrations on connect, upgrading older databases in place without data loss.
 - Feature backlog workflow: a local (gitignored) `feature-list.csv` backlog and
   a `corticore-feature-builder` project skill that drives researched,
   vision-checked, test-backed feature work, plus a `ROADMAP.md`.
