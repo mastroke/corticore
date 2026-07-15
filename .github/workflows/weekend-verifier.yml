@@ -1,0 +1,68 @@
+name: Weekend verifier
+
+# One independent, fresh-environment verification of the week's merged code.
+# Runs Saturday 04:00 Asia/Kolkata (Fri 22:30 UTC). It checks out the merged
+# default branch into a clean runner - with no planner/executor context - and
+# independently re-runs the full suite, the eval regression gate, and a
+# clean-room package smoke test. On any failure it opens a blocking issue; it
+# never edits code and never approves its own candidate. This is the
+# unbiased, isolated check requested for the release cadence.
+
+on:
+  schedule:
+    - cron: "30 22 * * 5" # Saturday 04:00 Asia/Kolkata
+  workflow_dispatch: {}
+
+concurrency:
+  group: weekend-verifier
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Record the verified SHA
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Clean install
+        run: |
+          python -m pip install --upgrade pip build
+          pip install -e ".[dev,orchestrate]"
+
+      - name: Full test suite
+        run: pytest -q
+
+      - name: Eval regression gate
+        run: python eval/check_baseline.py
+
+      - name: Clean-room wheel smoke test
+        run: |
+          python -m build
+          python -m venv /tmp/verify
+          /tmp/verify/bin/pip install dist/*.whl
+          /tmp/verify/bin/python -c "import corticore; print('import OK', corticore.__version__)"
+
+      - name: Open blocking issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "Weekend verifier failed for ${{ steps.sha.outputs.sha }}" \
+            --label "release-blocker" \
+            --body "The independent weekend verifier failed on merged \`main\` at commit ${{ steps.sha.outputs.sha }}. See run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. This blocks the next automated release until resolved."

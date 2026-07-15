@@ -257,13 +257,90 @@ required from you. If a database reports a schema version newer than your
 installed corticore build, the store refuses to open rather than risk
 corrupting it — upgrade corticore in that case.
 
+## Autonomous agent swarm
+
+On top of the single research loop, corticore runs a small **swarm** of Cursor
+cloud agents that operates every morning (04:00-09:00 Asia/Kolkata) and keeps
+the project healthy and release-ready. See
+[ADR 0006](research/design/adr/0006-agent-swarm-orchestration.md) for the full
+reasoning; the code is under `orchestrate/swarm/` and `orchestrate/run_swarm.py`.
+
+How a daily cycle works:
+
+- Parallel **thinker** agents (GPT-class reasoning) scout for maintenance,
+  research, and release-risk work and each propose bounded tasks.
+- A read-only **judge** picks at most one proposal for the day.
+- A single **executor** (Composer) - the only role allowed to write code -
+  implements that one scoped change and opens one PR. It never pushes to `main`.
+- Every step is written to a durable ledger so interrupted work is *resumed*,
+  not repeated.
+
+Separately, a **weekend verifier** re-checks the week's merged `main` from a
+clean clone with no planner context (tests + eval gate + clean-room wheel
+import) and files a `release-blocker` issue if anything fails.
+
+### Release cadence (automatic, gated)
+
+- **Thursday** (`release-prep.yml`) computes the semantic bump deterministically
+  from merged change labels (`breaking`→major, `feature`→minor, `fix`→patch),
+  rolls `CHANGELOG.md`, and opens an auto-merge `Release <version>` PR.
+- **Friday** (`release.yml`) publishes only when *every* gate clears: kill
+  switch on, CI green, verifier green, CHANGELOG entry present, clean history,
+  no open `release-blocker` issues, no existing tag, and PyPI Trusted
+  Publishing configured. Publishing uses OIDC (no API token) and is idempotent.
+
+### Kill switches and cost controls
+
+- `SWARM_ENABLED` (repo variable) must be `true` for the executor to write
+  anything; otherwise the swarm only thinks.
+- `RELEASE_ENABLED` (repo variable) must be `true` to publish.
+- `orchestrate/swarm.yml` caps parallel thinkers, code-changing tasks per cycle
+  (default 1), and total runs; `run_swarm.py` refuses to start work outside the
+  operating window and enforces a per-cycle deadline.
+
+### Preview and manual control
+
+```bash
+pip install -e ".[dev,orchestrate]"
+python orchestrate/run_swarm.py --dry-run        # print every prompt, no API key, no agents
+python orchestrate/run_swarm.py --no-write       # run thinkers/judge for real, never the executor
+python orchestrate/prepare_release.py --dry-run  # show the computed version bump only
+```
+
+Each workflow also has a `workflow_dispatch` trigger for manual, on-demand runs.
+
+### One-time activation
+
+The swarm can only be switched on with a few external, one-time steps (not
+doable from a code checkout):
+
+1. Enable **Long running agents** for your Cursor team (Team Settings) and
+   create a least-privilege **service-account** API key with access to the repo.
+2. Add secrets/variables in GitHub (Settings → Secrets and variables → Actions):
+   `CURSOR_API_KEY` (secret); `SWARM_ENABLED`, `RELEASE_ENABLED` (variables);
+   optionally `SWARM_LEDGER_ISSUE` (a tracking issue number for the ledger).
+3. Configure branch protection on `main` requiring the **CI** and **Weekend
+   verifier** checks, and enable auto-merge for the release PR.
+4. Register this repo's release workflow as a **PyPI Trusted Publisher**
+   (there is no `corticore` project on PyPI yet, so do this before the first
+   unattended publish).
+
+### Incident recovery
+
+- To stop everything immediately, set `SWARM_ENABLED` and `RELEASE_ENABLED` to
+  `false` - in-flight runs finish, no new work starts, and nothing publishes.
+- A failed release leaves no tag (the tag is created only on the publish path);
+  fix forward and let the next cycle re-run - `skip-existing` and the tag/version
+  checks make re-runs idempotent.
+- Resolve any open `release-blocker` issue before re-enabling releases.
+
 ## Project layout
 
 ```
 src/corticore/     the library (core, stores, embeddings, dynamics, trace)
 research/          paper -> note -> ADR trail behind every design decision
-eval/              reproducible evaluation harness, results, and BASELINE.md
-orchestrate/       scheduled paper-loop scripts + prompt (see ADR 0005)
+eval/              evaluation harness, BASELINE.md, and the regression gate
+orchestrate/       paper-loop scripts + the agent swarm (swarm/, run_swarm.py)
 examples/          runnable quickstart
 tests/             unit tests
 ```

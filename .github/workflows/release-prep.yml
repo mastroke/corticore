@@ -1,0 +1,59 @@
+name: Release prep
+
+# Thursday 04:00 Asia/Kolkata (Wed 22:30 UTC): deterministically prepare the
+# weekly release-candidate PR from the labels merged during the week. Opens a
+# `Release <version>` PR with auto-merge enabled - it merges only once branch
+# protection's required checks (CI + weekend verifier) pass. No LLM computes
+# the version; see orchestrate/prepare_release.py.
+
+on:
+  schedule:
+    - cron: "30 22 * * 3" # Thursday 04:00 Asia/Kolkata
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Compute the bump and print it without opening a PR"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-prep
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install orchestrate extras
+        run: pip install -e ".[dev,orchestrate]"
+
+      - name: Guard - release kill switch
+        if: ${{ vars.RELEASE_ENABLED != 'true' }}
+        run: |
+          echo "RELEASE_ENABLED != true; skipping release prep."
+          exit 0
+
+      - name: Prepare release candidate PR
+        if: ${{ vars.RELEASE_ENABLED == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "corticore-release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python orchestrate/prepare_release.py --repo "${{ github.repository }}" --dry-run
+          else
+            python orchestrate/prepare_release.py --repo "${{ github.repository }}"
+          fi

@@ -1,12 +1,29 @@
 # Changelog
 
-All notable changes to corticore are documented here. This project adheres to
-[Semantic Versioning](https://semver.org/) and the format is loosely based on
-[Keep a Changelog](https://keepachangelog.com/).
+All notable changes to corticore are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning is
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+The automated Friday release derives the next version deterministically from
+the change labels merged during the week: any `breaking` -> major, else any
+`feature` -> minor, else `fix` -> patch. Entries accumulate under
+`Unreleased` and are moved under a dated version heading at release time.
 
 ## [Unreleased]
 
 ### Added
+
+- Agent-swarm orchestration under `orchestrate/swarm/`: role-separated Cursor
+  Cloud thinkers, a judge, a single code-writing executor, and an independent
+  blind verifier, coordinated by `orchestrate/run_swarm.py` under a daily
+  operating window, fail-closed model validation, a durable run ledger, and
+  hard cost caps (see `research/design/adr/0006-agent-swarm-orchestration.md`).
+- Deterministic CI gates (`.github/workflows/ci.yml`): test matrix, package
+  build + metadata check, clean-room wheel smoke test, and an eval regression
+  gate (`eval/check_baseline.py`).
+- Automated Friday release pipeline: deterministic release-candidate
+  preparation (`orchestrate/prepare_release.py`), a weekend independent
+  verifier, and a fail-closed publish workflow using PyPI Trusted Publishing.
 - CLI inspection tool (`F010`): a `corticore` console command with
   `list`, `recall`, `why`, and `reflect` subcommands for inspecting a memory
   store from the shell. Registered via `project.scripts`.
@@ -50,3 +67,15 @@ All notable changes to corticore are documented here. This project adheres to
 - Metadata-filtered recall (`F001`): `recall(query, filters={...})` narrows
   candidates to memories whose metadata matches every key/value pair before
   scoring. Omitting `filters` preserves prior behavior exactly.
+
+### Changed
+
+- `corticore.__version__` is now derived from package metadata (single source
+  of truth in `pyproject.toml`) instead of a duplicated literal.
+
+## [0.1.0]
+
+- Initial alpha: SQLite backend (default), local embedder (default),
+  decay/consolidate/trace dynamics, time-bounded expiry, optional
+  sentence-transformers/Azure OpenAI embedders and Postgres backend, and the
+  scheduled paper-review-to-PR loop.

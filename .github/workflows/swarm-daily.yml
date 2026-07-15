@@ -1,0 +1,66 @@
+name: Swarm daily
+
+# The daily agent-swarm cycle. Runs at 04:00 Asia/Kolkata (22:30 UTC the
+# previous day). Parallel GPT-class thinkers propose bounded work, a judge
+# picks at most one, and a single Composer executor opens one scoped PR - it
+# never pushes to the default branch. See
+# research/design/adr/0006-agent-swarm-orchestration.md.
+#
+# Guards: SWARM_ENABLED must be "true" (repo variable kill switch) for the
+# executor to run; run_swarm.py additionally enforces the operating window,
+# fail-closed model validation, and a per-cycle deadline.
+
+on:
+  schedule:
+    - cron: "30 22 * * *" # 04:00 Asia/Kolkata (UTC+5:30)
+  workflow_dispatch:
+    inputs:
+      no_write:
+        description: "Run thinkers/judge only; never run the code-writing executor"
+        type: boolean
+        default: false
+
+concurrency:
+  group: swarm-daily
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write # ledger comments on the tracking issue
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300 # hard cap well past the 5h operating window
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install orchestration extras
+        run: pip install -e ".[dev,orchestrate]"
+
+      - name: Run one swarm cycle
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          SWARM_ENABLED: ${{ vars.SWARM_ENABLED }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SWARM_LEDGER_ISSUE: ${{ vars.SWARM_LEDGER_ISSUE }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ inputs.no_write }}" = "true" ]; then
+            python orchestrate/run_swarm.py --no-write
+          else
+            python orchestrate/run_swarm.py
+          fi
+
+      - name: Upload swarm ledger artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarm-ledger
+          path: orchestrate/.swarm_ledger.jsonl
+          if-no-files-found: ignore
+          retention-days: 30

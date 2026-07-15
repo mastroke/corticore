@@ -1,0 +1,135 @@
+name: Release
+
+# Fully-automatic publish, fail-closed. Triggers when a version bump lands on
+# main (the auto-merged release PR). Publishes only when EVERY gate clears:
+# kill switch on, no existing tag for this version, no open release-blocker
+# issues, a matching CHANGELOG entry, and a green self-contained test + eval +
+# build gate. Publishing uses PyPI Trusted Publishing (OIDC) - no API token.
+# Re-runs are idempotent: an existing tag or already-published version is a
+# no-op, never a duplicate publish.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.decide.outputs.should_release }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from pyproject
+        id: version
+        run: |
+          VERSION=$(python -c "import re,sys; print(re.search(r'^version\s*=\s*\"([^\"]+)\"', open('pyproject.toml').read(), re.M).group(1))")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+
+      - name: Evaluate release gate (fail-closed)
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          SHOULD="true"
+
+          if [ "${{ vars.RELEASE_ENABLED }}" != "true" ]; then
+            echo "BLOCK: RELEASE_ENABLED != true"
+            SHOULD="false"
+          fi
+
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "SKIP: tag v$VERSION already exists (idempotent no-op)"
+            SHOULD="false"
+          fi
+
+          if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
+            echo "BLOCK: no CHANGELOG entry for $VERSION"
+            SHOULD="false"
+          fi
+
+          BLOCKERS=$(gh issue list --repo "${{ github.repository }}" --state open --label release-blocker --json number --jq 'length' || echo "0")
+          if [ "$BLOCKERS" != "0" ]; then
+            echo "BLOCK: $BLOCKERS open release-blocker issue(s)"
+            SHOULD="false"
+          fi
+
+          echo "should_release=$SHOULD" >> "$GITHUB_OUTPUT"
+          echo "Decision: should_release=$SHOULD"
+
+  publish:
+    needs: gate
+    if: ${{ needs.gate.outputs.should_release == 'true' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write # create the tag + GitHub Release
+      id-token: write # PyPI Trusted Publishing (OIDC)
+      attestations: write # build provenance attestation
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install + self-contained gate
+        run: |
+          python -m pip install --upgrade pip build
+          pip install -e ".[dev,orchestrate]"
+          pytest -q
+          python eval/check_baseline.py
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Verify built version matches tag target
+        run: |
+          VERSION="${{ needs.gate.outputs.version }}"
+          ls dist/ | grep "$VERSION" || (echo "built artifacts do not match $VERSION" && exit 1)
+
+      - name: Create and push tag
+        run: |
+          VERSION="${{ needs.gate.outputs.version }}"
+          git config user.name "corticore-release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Release $VERSION"
+          git push origin "v$VERSION"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: "dist/*"
+
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ needs.gate.outputs.version }}"
+          gh release create "v$VERSION" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "v$VERSION" \
+            --notes "Automated release $VERSION. See CHANGELOG.md for details."

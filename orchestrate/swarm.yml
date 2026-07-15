@@ -1,0 +1,96 @@
+# corticore agent-swarm registry.
+#
+# The daily scheduler (`.github/workflows/swarm-daily.yml` ->
+# `orchestrate/run_swarm.py`) reads this file. It defines the operating
+# window, hard cost caps, the role -> model -> prompt mapping, and the tasks
+# the swarm may pick up. See research/design/adr/0006-agent-swarm-orchestration.md.
+#
+# IMPORTANT - model ids are validated against `Cursor.models.list()` at
+# pre-flight and the run fails closed if any id is not available to the
+# account. Confirm the exact ids your account exposes (they can differ from
+# the display names) and update `model:` below to match, rather than relying
+# on a silent fallback.
+
+window:
+  timezone: Asia/Kolkata
+  start: "04:00"
+  end: "09:00"
+
+budget:
+  # Thinkers run in parallel up to this many at once.
+  max_parallel_thinkers: 3
+  # At most one code-changing task per daily cycle (keeps blast radius small).
+  max_code_changing_tasks_per_run: 1
+  # Absolute cap on cloud runs launched per cycle (defence against a loop).
+  max_total_runs_per_cycle: 8
+
+roles:
+  # --- read-only thinkers (GPT 5.6 Sol class reasoning) ---------------
+  maintenance_scout:
+    model: gpt-5.6-sol
+    prompt_file: swarm/maintenance_scout.md
+    can_write: false
+    timeout_seconds: 1800
+    max_retries: 2
+
+  research_scout:
+    model: gpt-5.6-sol
+    prompt_file: swarm/research_scout.md
+    can_write: false
+    timeout_seconds: 1800
+    max_retries: 2
+
+  release_risk_critic:
+    model: gpt-5.6-sol
+    prompt_file: swarm/release_risk_critic.md
+    can_write: false
+    timeout_seconds: 1800
+    max_retries: 2
+
+  # --- read-only judge ------------------------------------------------
+  judge:
+    model: gpt-5.6-sol
+    prompt_file: swarm/judge.md
+    can_write: false
+    timeout_seconds: 1800
+    max_retries: 1
+
+  # --- the single code-writing executor (Composer) --------------------
+  executor:
+    model: composer-2.5
+    prompt_file: swarm/executor.md
+    can_write: true
+    auto_create_pr: true
+    timeout_seconds: 5400
+    max_retries: 1
+
+  # --- independent blind verifier (used by the weekend workflow) ------
+  verifier:
+    model: gpt-5.6-sol
+    prompt_file: swarm/verifier.md
+    can_write: false
+    timeout_seconds: 3600
+    max_retries: 1
+
+  # --- Friday release manager (used by the release workflow) ----------
+  release_manager:
+    model: composer-2.5
+    prompt_file: swarm/release_manager.md
+    can_write: true
+    auto_create_pr: true
+    timeout_seconds: 3600
+    max_retries: 1
+
+tasks:
+  - name: corticore-maintenance
+    description: >-
+      Keep corticore healthy and release-ready: triage CI/test/packaging
+      health first, then bounded, genuinely-valuable improvements. One
+      scoped PR per cycle, never a broad rewrite.
+    repo: mastroke/corticore
+    priority: 10
+    thinker_roles: [maintenance_scout, research_scout, release_risk_critic]
+    judge_role: judge
+    executor_role: executor
+    verifier_role: verifier
+    enabled: true
