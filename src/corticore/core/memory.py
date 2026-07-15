@@ -205,6 +205,14 @@ class Memory:
         """
         return await asyncio.to_thread(self.remember, *args, **kwargs)
 
+    async def arecall(self, *args: Any, **kwargs: Any) -> list[RecallResult]:
+        """Async `recall`: runs retrieval + access bookkeeping off the loop."""
+        return await asyncio.to_thread(self.recall, *args, **kwargs)
+
+    async def areflect(self) -> ConsolidationReport:
+        """Async `reflect`: runs a consolidation pass off the loop."""
+        return await asyncio.to_thread(self.reflect)
+
     def export_jsonl(self, path: str) -> int:
         """Write every stored memory to `path` as JSON Lines; return the count.
 
