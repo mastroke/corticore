@@ -96,6 +96,28 @@ class Memory:
         self.store: MemoryStore = store or SQLiteStore(path)
         self.embedder: Embedder = embedder or LocalEmbedder()
         self._on_event = on_event
+        if on_event is not None:
+            self._install_event_hook(on_event)
+
+    def _install_event_hook(self, on_event: EventCallback) -> None:
+        """Wrap the store's ``append_event`` so every recorded trace event is
+        forwarded to ``on_event``.
+
+        Wrapping the store (rather than the individual API methods) means
+        events written deep inside ``reflect()`` are observed too. The hook
+        runs after the event is durably recorded; a raising callback must not
+        corrupt stored state, so its exceptions are swallowed by design.
+        """
+        inner = self.store.append_event
+
+        def append_with_hook(event: TraceEvent) -> None:
+            inner(event)
+            try:
+                on_event(event)
+            except Exception:  # observability must never break the write path
+                pass
+
+        self.store.append_event = append_with_hook  # type: ignore[method-assign]
 
     def remember(
         self,
