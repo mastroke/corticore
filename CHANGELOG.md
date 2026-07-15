@@ -7,6 +7,9 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Async memory API (`F005`): `aremember`, `arecall`, and `areflect` wrap the
+  sync methods with `asyncio.to_thread` so async agent runtimes are not
+  blocked. No new dependencies; sync remains the default.
 - Structured memory types (`F007`): optional `memory_type`
   (semantic/episodic/procedural, see `MemoryType`) tags a memory's cognitive
   category under `metadata`, filterable via `recall(filters=...)`. Untyped

@@ -9,6 +9,7 @@ detection) without changing this class's surface.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
@@ -195,6 +196,22 @@ class Memory:
     def why(self, memory_id: str) -> Trace:
         """Explain the full history behind a memory."""
         return explain(self.store, self.config, memory_id)
+
+    async def aremember(self, *args: Any, **kwargs: Any) -> str:
+        """Async `remember`: runs the blocking store write in a worker thread.
+
+        For use inside async agent runtimes so a memory write does not block
+        the event loop. The sync `remember` remains the primary API.
+        """
+        return await asyncio.to_thread(self.remember, *args, **kwargs)
+
+    async def arecall(self, *args: Any, **kwargs: Any) -> list[RecallResult]:
+        """Async `recall`: runs retrieval + access bookkeeping off the loop."""
+        return await asyncio.to_thread(self.recall, *args, **kwargs)
+
+    async def areflect(self) -> ConsolidationReport:
+        """Async `reflect`: runs a consolidation pass off the loop."""
+        return await asyncio.to_thread(self.reflect)
 
     def export_jsonl(self, path: str) -> int:
         """Write every stored memory to `path` as JSON Lines; return the count.

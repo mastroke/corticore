@@ -120,6 +120,20 @@ python orchestrate/check_new_papers.py           # real network check, no API ke
 python orchestrate/run_cloud_agent.py --dry-run  # prints the prompt, doesn't launch anything
 ```
 
+## Async API
+
+For async agent runtimes, `aremember`, `arecall`, and `areflect` mirror their
+sync counterparts and run the blocking work in a worker thread so they never
+block the event loop:
+
+```python
+mid = await mem.aremember("the user prefers dark mode", namespace="alice")
+results = await mem.arecall("preferences", namespace="alice")
+report = await mem.areflect()
+```
+
+The synchronous API remains the primary, zero-dependency default.
+
 ## Memory types
 
 Optionally tag a memory's cognitive category — `semantic` (facts),
