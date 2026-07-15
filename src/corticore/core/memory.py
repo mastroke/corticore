@@ -90,17 +90,30 @@ class Memory:
         query: str,
         k: Optional[int] = None,
         filters: Optional[dict[str, Any]] = None,
+        namespace: Optional[str] = "default",
     ) -> list[RecallResult]:
         """Return the `k` most relevant, decay-adjusted memories for `query`.
 
         `filters` narrows candidates to memories whose `metadata` matches
         every key/value pair exactly (e.g. `{"user_id": "abc"}`), applied
-        before scoring. Omitting it searches across all memories, matching
-        prior behavior exactly.
+        before scoring.
+
+        `namespace` scopes the search to a single logical partition and
+        defaults to `"default"` (the implicit namespace for memories stored
+        without one). Pass `namespace=None` to search across all namespaces.
         """
         now = time.time()
         items = self.store.all()
-        results = retrieve(query, items, self.embedder, self.config, k=k, now=now, filters=filters)
+        results = retrieve(
+            query,
+            items,
+            self.embedder,
+            self.config,
+            k=k,
+            now=now,
+            filters=filters,
+            namespace=namespace,
+        )
 
         for result in results:
             item = self.store.get(result.id)
