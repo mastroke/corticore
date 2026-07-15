@@ -7,6 +7,10 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Observability hooks (`F008`): an optional `on_event` callback on `Memory`
+  receives every recorded `TraceEvent` (including events emitted inside
+  `reflect()`) for logging/metrics/tracing. Callback exceptions are isolated
+  from the write path. No-op by default.
 - Async memory API (`F005`): `aremember`, `arecall`, and `areflect` wrap the
   sync methods with `asyncio.to_thread` so async agent runtimes are not
   blocked. No new dependencies; sync remains the default.

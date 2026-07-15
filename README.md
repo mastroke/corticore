@@ -120,6 +120,24 @@ python orchestrate/check_new_papers.py           # real network check, no API ke
 python orchestrate/run_cloud_agent.py --dry-run  # prints the prompt, doesn't launch anything
 ```
 
+## Observability
+
+Pass an `on_event` callback to receive every trace event corticore records
+(stored, recalled, merged, forgotten, ...) and forward it to your logs,
+metrics, or tracing backend. The callback runs after each event is durably
+recorded, and a raising callback never breaks the write path.
+
+```python
+import logging
+
+def to_log(event):
+    logging.info("corticore %s: %s", event.kind, event.detail)
+
+mem = Memory("agent.db", on_event=to_log)
+```
+
+Omit `on_event` (the default) for zero-overhead, zero-setup usage.
+
 ## Async API
 
 For async agent runtimes, `aremember`, `arecall`, and `areflect` mirror their
