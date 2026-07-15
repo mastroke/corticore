@@ -24,6 +24,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from corticore import Memory  # noqa: E402
+from corticore.embeddings.base import Embedder  # noqa: E402
 from corticore.embeddings.local import LocalEmbedder  # noqa: E402
 from corticore.stores.sqlite_store import SQLiteStore  # noqa: E402
 
@@ -65,10 +66,15 @@ def _synthetic_dataset() -> Dataset:
     )
 
 
-def run(dataset: Dataset, k: int = 3) -> dict[str, Any]:
-    """Run one dataset through remember -> reflect -> recall and score it."""
+def run(dataset: Dataset, k: int = 3, embedder: Embedder | None = None) -> dict[str, Any]:
+    """Run one dataset through remember -> reflect -> recall and score it.
+
+    `embedder` defaults to the zero-dependency `LocalEmbedder`; pass another
+    `Embedder` (e.g. `SentenceTransformerEmbedder`) to benchmark it against
+    the same dataset.
+    """
     # An in-memory SQLite database keeps each eval run isolated and disk-free.
-    mem = Memory(store=SQLiteStore(":memory:"), embedder=LocalEmbedder())
+    mem = Memory(store=SQLiteStore(":memory:"), embedder=embedder or LocalEmbedder())
 
     for fact in dataset.facts:
         mem.remember(fact)
