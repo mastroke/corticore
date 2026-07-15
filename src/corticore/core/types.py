@@ -23,6 +23,25 @@ class MemoryStatus(str, Enum):
     FORGOTTEN = "forgotten"
 
 
+#: Metadata key under which a memory's cognitive type is recorded.
+MEMORY_TYPE_KEY = "memory_type"
+
+
+class MemoryType(str, Enum):
+    """Cognitive category of a memory (Letta/MemGPT-inspired), stored under
+    ``metadata[MEMORY_TYPE_KEY]``.
+
+    This is a convention layered on top of `metadata`, not a required field:
+    memories without a type behave exactly as before, and the type is
+    queryable through the same `recall(filters=...)` mechanism as any other
+    metadata key.
+    """
+
+    SEMANTIC = "semantic"      # facts about the world/user
+    EPISODIC = "episodic"      # specific events/experiences
+    PROCEDURAL = "procedural"  # how-to knowledge, rules, skills
+
+
 @dataclass
 class MemoryItem:
     """A single unit of stored memory."""

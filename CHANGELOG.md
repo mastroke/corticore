@@ -7,6 +7,10 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Structured memory types (`F007`): optional `memory_type`
+  (semantic/episodic/procedural, see `MemoryType`) tags a memory's cognitive
+  category under `metadata`, filterable via `recall(filters=...)`. Untyped
+  memories are unaffected. `MemoryType` is exported from the package root.
 - JSONL import/export (`F006`): `export_jsonl(path)` and `import_jsonl(path)`
   serialize a store's memories to/from JSON Lines for backup, migration, and
   debugging. Import is idempotent (upsert by id).
