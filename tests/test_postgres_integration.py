@@ -109,3 +109,58 @@ def test_connectivity_and_schema(store):
     )
     names = {row["column_name"] for row in cols}
     assert {"id", "text", "namespace", "metadata"} <= names
+
+
+def test_crud_round_trip(store):
+    from corticore.core.types import MemoryItem
+
+    item = MemoryItem(
+        id="m1",
+        text="postgres fact",
+        namespace="team-a",
+        metadata={"topic": "db"},
+        embedding=[0.1, 0.2],
+    )
+    store.put(item)
+
+    fetched = store.get("m1")
+    assert fetched is not None
+    assert fetched.text == "postgres fact"
+    assert fetched.namespace == "team-a"
+    assert fetched.metadata == {"topic": "db"}
+
+    # update via upsert
+    item.text = "updated fact"
+    store.put(item)
+    assert store.get("m1").text == "updated fact"
+
+    assert len(store.all()) == 1
+    store.delete("m1")
+    assert store.get("m1") is None
+    assert store.all() == []
+
+
+def test_concurrent_writes_are_all_persisted(store):
+    import threading
+
+    from corticore.core.types import MemoryItem
+
+    n = 50
+    errors: list[Exception] = []
+
+    def writer(i: int) -> None:
+        try:
+            store.put(
+                MemoryItem(id=f"m{i}", text=f"fact {i}", embedding=[float(i)])
+            )
+        except Exception as exc:  # collected so the assert reports the cause
+            errors.append(exc)
+
+    threads = [threading.Thread(target=writer, args=(i,)) for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert len(store.all()) == n
