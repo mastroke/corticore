@@ -60,6 +60,8 @@ def reflect(
             b = active[j]
             if b.id in resolved:
                 continue
+            if a.namespace != b.namespace:
+                continue  # never consolidate across namespace boundaries (F002)
             sim = _similarity(a, b)
             if sim < config.consolidation.merge_similarity_threshold:
                 continue
