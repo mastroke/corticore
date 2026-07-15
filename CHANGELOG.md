@@ -7,6 +7,11 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- Namespaced memories (`F002`): `remember(..., namespace=...)` and
+  `recall(..., namespace=...)` isolate memories per user/session/agent in a
+  single store. Namespaces never leak across `recall()` and are never
+  consolidated together by `reflect()`. Defaults to `"default"`, preserving
+  single-tenant behavior.
 - SQLite schema migrations (`F003`): the default store tracks its schema
   version via `PRAGMA user_version` and applies ordered, idempotent
   migrations on connect, upgrading older databases in place without data loss.
