@@ -45,6 +45,39 @@ def cmd_list(mem: Memory, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_recall(mem: Memory, args: argparse.Namespace) -> int:
+    """Run a recall query and print the ranked, decay-adjusted results."""
+    namespace = args.namespace or None  # empty string => search all namespaces
+    results = mem.recall(args.query, k=args.k, namespace=namespace)
+    if not results:
+        print("(no results)")
+        return 0
+    for r in results:
+        print(f"{r.score:6.3f}  {r.id[:8]}  {_truncate(r.text)}")
+    return 0
+
+
+def cmd_why(mem: Memory, args: argparse.Namespace) -> int:
+    """Print the full trace (why a memory exists / how it changed)."""
+    trace = mem.why(args.memory_id)
+    if not trace.events:
+        print(f"(no trace for {args.memory_id})")
+        return 0
+    for event in trace.events:
+        print(f"{event.at:15.3f}  {event.kind:<10}  {event.detail}")
+    return 0
+
+
+def cmd_reflect(mem: Memory, args: argparse.Namespace) -> int:
+    """Run a consolidation pass and report what changed."""
+    report = mem.reflect()
+    print(
+        f"inspected={report.inspected} merged={len(report.merged)} "
+        f"superseded={len(report.superseded)} pruned={len(report.pruned)}"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="corticore", description="Inspect a corticore memory store."
@@ -60,6 +93,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.add_argument("--namespace", default=None, help="only this namespace")
     p_list.add_argument("--limit", type=int, default=20, help="max rows (default: 20)")
     p_list.set_defaults(func=cmd_list)
+
+    p_recall = sub.add_parser("recall", help="run a recall query")
+    p_recall.add_argument("query", help="the query text")
+    p_recall.add_argument("--k", type=int, default=None, help="number of results")
+    p_recall.add_argument(
+        "--namespace",
+        default="default",
+        help="namespace to search (default: 'default'; use '' for all)",
+    )
+    p_recall.set_defaults(func=cmd_recall)
+
+    p_why = sub.add_parser("why", help="show the trace behind a memory")
+    p_why.add_argument("memory_id", help="the memory id to explain")
+    p_why.set_defaults(func=cmd_why)
+
+    p_reflect = sub.add_parser("reflect", help="run a consolidation pass")
+    p_reflect.set_defaults(func=cmd_reflect)
 
     return parser
 
