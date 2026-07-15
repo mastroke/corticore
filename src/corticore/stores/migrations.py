@@ -50,11 +50,25 @@ def _migration_001_base_schema(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migration_002_add_namespace(conn: sqlite3.Connection) -> None:
+    """Add the ``namespace`` column for multi-tenant isolation (F002).
+
+    Existing rows default to ``'default'`` so data written before namespaces
+    stays in the single implicit namespace.
+    """
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(memories)").fetchall()]
+    if "namespace" not in cols:
+        conn.execute(
+            "ALTER TABLE memories ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'"
+        )
+
+
 # Ordered registry: index i applies the migration that upgrades the schema
 # from version i to version i+1. Append new migrations; never reorder or edit
 # a shipped one.
 MIGRATIONS: list[Migration] = [
     _migration_001_base_schema,
+    _migration_002_add_namespace,
 ]
 
 LATEST_VERSION = len(MIGRATIONS)

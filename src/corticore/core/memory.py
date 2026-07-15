@@ -49,18 +49,24 @@ class Memory:
         text: str,
         metadata: Optional[dict[str, Any]] = None,
         expires_at: Optional[float] = None,
+        namespace: str = "default",
     ) -> str:
         """Store a new memory and return its id.
 
         `expires_at` is an optional epoch-seconds deadline (EverMemOS-style
         "Foresight" signal, see ADR 0003): once passed, `reflect()` forgets
         this memory regardless of how recently or often it's been recalled.
+
+        `namespace` isolates this memory to a logical partition (e.g. a user
+        or agent id). Memories in different namespaces never surface in each
+        other's `recall()` results. Defaults to `"default"`.
         """
         now = time.time()
         memory_id = uuid.uuid4().hex
         item = MemoryItem(
             id=memory_id,
             text=text,
+            namespace=namespace,
             metadata=metadata or {},
             embedding=self.embedder.embed(text),
             created_at=now,
@@ -84,17 +90,30 @@ class Memory:
         query: str,
         k: Optional[int] = None,
         filters: Optional[dict[str, Any]] = None,
+        namespace: Optional[str] = "default",
     ) -> list[RecallResult]:
         """Return the `k` most relevant, decay-adjusted memories for `query`.
 
         `filters` narrows candidates to memories whose `metadata` matches
         every key/value pair exactly (e.g. `{"user_id": "abc"}`), applied
-        before scoring. Omitting it searches across all memories, matching
-        prior behavior exactly.
+        before scoring.
+
+        `namespace` scopes the search to a single logical partition and
+        defaults to `"default"` (the implicit namespace for memories stored
+        without one). Pass `namespace=None` to search across all namespaces.
         """
         now = time.time()
         items = self.store.all()
-        results = retrieve(query, items, self.embedder, self.config, k=k, now=now, filters=filters)
+        results = retrieve(
+            query,
+            items,
+            self.embedder,
+            self.config,
+            k=k,
+            now=now,
+            filters=filters,
+            namespace=namespace,
+        )
 
         for result in results:
             item = self.store.get(result.id)

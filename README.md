@@ -120,6 +120,25 @@ python orchestrate/check_new_papers.py           # real network check, no API ke
 python orchestrate/run_cloud_agent.py --dry-run  # prints the prompt, doesn't launch anything
 ```
 
+## Namespaces
+
+Isolate memories per user, session, or agent by passing a `namespace`. This
+keeps one shared store safe for multi-tenant use without any extra
+infrastructure. Memories in different namespaces never surface in each
+other's `recall()` results, and `reflect()` never consolidates across
+namespace boundaries.
+
+```python
+mem.remember("Alice prefers dark mode", namespace="alice")
+mem.remember("Bob prefers light mode", namespace="bob")
+
+mem.recall("theme preference", namespace="alice")  # only Alice's memories
+mem.recall("theme preference", namespace=None)      # search every namespace
+```
+
+`namespace` defaults to `"default"`, so existing single-tenant code keeps
+working unchanged.
+
 ## Schema migrations
 
 The default SQLite store versions its schema with SQLite's built-in

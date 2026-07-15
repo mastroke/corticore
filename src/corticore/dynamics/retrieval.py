@@ -51,8 +51,13 @@ def retrieve(
     k: int | None = None,
     now: float | None = None,
     filters: Optional[dict[str, Any]] = None,
+    namespace: Optional[str] = None,
 ) -> list[RecallResult]:
-    """Rank active memories matching `filters` against `query`, return top `k`."""
+    """Rank active memories matching `filters` against `query`, return top `k`.
+
+    If `namespace` is not None, only memories in that namespace are
+    considered; passing None searches across every namespace.
+    """
     now = now if now is not None else time.time()
     k = k if k is not None else config.retrieval.default_k
     query_vec = embedder.embed(query)
@@ -60,6 +65,8 @@ def retrieve(
     scored: list[RecallResult] = []
     for item in items:
         if item.status != MemoryStatus.ACTIVE:
+            continue
+        if namespace is not None and item.namespace != namespace:
             continue
         if not matches_filters(item, filters):
             continue
