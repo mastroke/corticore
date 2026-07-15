@@ -32,11 +32,13 @@ class SQLiteStore(MemoryStore):
         self._conn.execute(
             """
             INSERT INTO memories
-                (id, text, metadata, embedding, created_at, last_accessed_at,
-                 access_count, salience, status, superseded_by, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, text, namespace, metadata, embedding, created_at,
+                 last_accessed_at, access_count, salience, status,
+                 superseded_by, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 text=excluded.text,
+                namespace=excluded.namespace,
                 metadata=excluded.metadata,
                 embedding=excluded.embedding,
                 created_at=excluded.created_at,
@@ -50,6 +52,7 @@ class SQLiteStore(MemoryStore):
             (
                 item.id,
                 item.text,
+                item.namespace,
                 json.dumps(item.metadata),
                 json.dumps(item.embedding),
                 item.created_at,
@@ -109,6 +112,7 @@ class SQLiteStore(MemoryStore):
         return MemoryItem(
             id=row["id"],
             text=row["text"],
+            namespace=row["namespace"],
             metadata=json.loads(row["metadata"]),
             embedding=json.loads(row["embedding"]),
             created_at=row["created_at"],
