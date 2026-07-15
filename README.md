@@ -167,6 +167,21 @@ mem.remember("to deploy, run make deploy", memory_type=MemoryType.PROCEDURAL)
 mem.recall("deploy", filters={"memory_type": "procedural"})
 ```
 
+## Command-line tool
+
+Installing corticore adds a `corticore` CLI for inspecting a store without
+writing code:
+
+```bash
+corticore --db agent.db list                 # list memories (most salient first)
+corticore --db agent.db recall "user name?"  # run a recall query
+corticore --db agent.db why <memory_id>       # show a memory's full trace
+corticore --db agent.db reflect               # run a consolidation pass
+```
+
+`list` and `recall` accept `--namespace`; the default database is
+`corticore.db`.
+
 ## Backup and migration
 
 Export a store to JSON Lines and import it back, for backups, moving between
