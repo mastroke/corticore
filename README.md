@@ -120,6 +120,16 @@ python orchestrate/check_new_papers.py           # real network check, no API ke
 python orchestrate/run_cloud_agent.py --dry-run  # prints the prompt, doesn't launch anything
 ```
 
+## Schema migrations
+
+The default SQLite store versions its schema with SQLite's built-in
+`PRAGMA user_version` and applies any pending, ordered migrations
+automatically when you open a store. Databases created by older corticore
+releases are upgraded in place on connect with no data loss and no action
+required from you. If a database reports a schema version newer than your
+installed corticore build, the store refuses to open rather than risk
+corrupting it — upgrade corticore in that case.
+
 ## Project layout
 
 ```
