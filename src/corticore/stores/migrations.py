@@ -74,3 +74,23 @@ def set_schema_version(conn: sqlite3.Connection, version: int) -> None:
     migration registry.
     """
     conn.execute(f"PRAGMA user_version = {int(version)}")
+
+
+def apply_migrations(conn: sqlite3.Connection) -> int:
+    """Bring ``conn`` up to ``LATEST_VERSION``, running only pending steps.
+
+    Returns the schema version after migrating. Each migration and its
+    version bump commit together, so an interrupted upgrade never leaves the
+    recorded version ahead of the applied schema.
+    """
+    current = get_schema_version(conn)
+    if current > LATEST_VERSION:
+        raise RuntimeError(
+            f"database schema version {current} is newer than this corticore "
+            f"build supports (max {LATEST_VERSION}); upgrade corticore"
+        )
+    for version in range(current, LATEST_VERSION):
+        MIGRATIONS[version](conn)
+        set_schema_version(conn, version + 1)
+        conn.commit()
+    return LATEST_VERSION
