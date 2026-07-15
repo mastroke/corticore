@@ -7,6 +7,9 @@ All notable changes to corticore are documented here. This project adheres to
 ## [Unreleased]
 
 ### Added
+- JSONL import/export (`F006`): `export_jsonl(path)` and `import_jsonl(path)`
+  serialize a store's memories to/from JSON Lines for backup, migration, and
+  debugging. Import is idempotent (upsert by id).
 - Namespaced memories (`F002`): `remember(..., namespace=...)` and
   `recall(..., namespace=...)` isolate memories per user/session/agent in a
   single store. Namespaces never leak across `recall()` and are never

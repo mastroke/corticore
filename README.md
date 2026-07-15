@@ -120,6 +120,18 @@ python orchestrate/check_new_papers.py           # real network check, no API ke
 python orchestrate/run_cloud_agent.py --dry-run  # prints the prompt, doesn't launch anything
 ```
 
+## Backup and migration
+
+Export a store to JSON Lines and import it back, for backups, moving between
+stores, or inspecting state:
+
+```python
+mem.export_jsonl("backup.jsonl")   # one memory per line
+
+restored = Memory("fresh.db")
+restored.import_jsonl("backup.jsonl")  # idempotent; re-import overwrites by id
+```
+
 ## Namespaces
 
 Isolate memories per user, session, or agent by passing a `namespace`. This

@@ -9,12 +9,56 @@ detection) without changing this class's surface.
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from typing import Any, Optional
 
 from corticore.core.config import Config
-from corticore.core.types import ConsolidationReport, MemoryItem, RecallResult, Trace, TraceEvent
+from corticore.core.types import (
+    ConsolidationReport,
+    MemoryItem,
+    MemoryStatus,
+    RecallResult,
+    Trace,
+    TraceEvent,
+)
+
+
+def _item_to_dict(item: MemoryItem) -> dict[str, Any]:
+    """Serialize a MemoryItem to a JSON-safe dict (status enum -> its value)."""
+    return {
+        "id": item.id,
+        "text": item.text,
+        "namespace": item.namespace,
+        "metadata": item.metadata,
+        "embedding": item.embedding,
+        "created_at": item.created_at,
+        "last_accessed_at": item.last_accessed_at,
+        "access_count": item.access_count,
+        "salience": item.salience,
+        "status": item.status.value,
+        "superseded_by": item.superseded_by,
+        "expires_at": item.expires_at,
+    }
+
+
+def _item_from_dict(data: dict[str, Any]) -> MemoryItem:
+    """Rebuild a MemoryItem from a dict produced by `_item_to_dict`."""
+    return MemoryItem(
+        id=data["id"],
+        text=data["text"],
+        namespace=data.get("namespace", "default"),
+        metadata=data.get("metadata", {}),
+        embedding=data.get("embedding", []),
+        created_at=data["created_at"],
+        last_accessed_at=data["last_accessed_at"],
+        access_count=data.get("access_count", 0),
+        salience=data.get("salience", 1.0),
+        status=MemoryStatus(data.get("status", "active")),
+        superseded_by=data.get("superseded_by"),
+        expires_at=data.get("expires_at"),
+    )
 from corticore.dynamics import consolidate as consolidate_mod
 from corticore.dynamics.decay import boost_on_access
 from corticore.dynamics.retrieval import retrieve
@@ -138,6 +182,35 @@ class Memory:
     def why(self, memory_id: str) -> Trace:
         """Explain the full history behind a memory."""
         return explain(self.store, self.config, memory_id)
+
+    def export_jsonl(self, path: str) -> int:
+        """Write every stored memory to `path` as JSON Lines; return the count.
+
+        One memory per line, so exports stream and diff cleanly. Useful for
+        backup, migration between stores, and debugging.
+        """
+        items = self.store.all()
+        with open(path, "w", encoding="utf-8") as fh:
+            for item in items:
+                fh.write(json.dumps(_item_to_dict(item), ensure_ascii=False) + "\n")
+        return len(items)
+
+    def import_jsonl(self, path: str) -> int:
+        """Load memories from a JSON Lines `path` into this store; return count.
+
+        Each line is a memory produced by `export_jsonl`. Existing memories
+        with the same id are overwritten (the store's `put` is an upsert), so
+        re-importing is idempotent. Blank lines are ignored.
+        """
+        count = 0
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                self.store.put(_item_from_dict(json.loads(line)))
+                count += 1
+        return count
 
     def close(self) -> None:
         self.store.close()
