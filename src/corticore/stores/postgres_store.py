@@ -11,20 +11,22 @@ Install with: pip install corticore[postgres]
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Optional
 
 from corticore.core.types import MemoryItem, MemoryStatus, TraceEvent
 from corticore.stores.base import MemoryStore
 
 _INSTALL_HINT = (
-    "PostgresStore requires the 'psycopg' package. "
-    "Install it with: pip install corticore[postgres]"
+    "PostgresStore requires the 'psycopg' and 'psycopg_pool' packages. "
+    "Install them with: pip install corticore[postgres]"
 )
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     text TEXT NOT NULL,
+    namespace TEXT NOT NULL DEFAULT 'default',
     metadata JSONB NOT NULL,
     embedding JSONB NOT NULL,
     created_at DOUBLE PRECISION NOT NULL,
@@ -46,19 +48,43 @@ CREATE TABLE IF NOT EXISTS events (
 );
 """
 
+# Bring pre-namespace Postgres databases up to the current schema. Idempotent.
+_MIGRATE = (
+    "ALTER TABLE memories ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL "
+    "DEFAULT 'default'"
+)
+
 
 class PostgresStore(MemoryStore):
-    """Postgres-backed `MemoryStore` for multi-writer/production deployments."""
+    """Postgres-backed `MemoryStore` for multi-writer/production deployments.
 
-    def __init__(self, dsn: Optional[str] = None) -> None:
+    Connections are managed by a `psycopg_pool.ConnectionPool` so many
+    concurrent writers share a bounded set of connections instead of each
+    holding one open indefinitely. Transient connection failures are retried
+    with exponential backoff (see `_run`).
+    """
+
+    def __init__(
+        self,
+        dsn: Optional[str] = None,
+        *,
+        min_size: int = 1,
+        max_size: int = 10,
+        max_retries: int = 3,
+        retry_backoff: float = 0.1,
+    ) -> None:
         try:
             import psycopg
             from psycopg.rows import dict_row
             from psycopg.types.json import Json
+            from psycopg_pool import ConnectionPool
         except ImportError as exc:  # pragma: no cover - exercised via importorskip
             raise ImportError(_INSTALL_HINT) from exc
 
+        self._psycopg = psycopg
         self._Json = Json
+        self._max_retries = max_retries
+        self._retry_backoff = retry_backoff
 
         dsn = dsn or os.environ.get("DATABASE_URL")
         if not dsn:
@@ -67,81 +93,125 @@ class PostgresStore(MemoryStore):
                 "DATABASE_URL. See .env.example."
             )
 
-        self._conn = psycopg.connect(dsn, row_factory=dict_row, autocommit=True)
-        self._conn.execute(_SCHEMA)
+        self._pool = ConnectionPool(
+            dsn,
+            min_size=min_size,
+            max_size=max_size,
+            kwargs={"row_factory": dict_row, "autocommit": True},
+            open=True,
+        )
+        self._run(lambda cur: cur.execute(_SCHEMA))
+        self._run(lambda cur: cur.execute(_MIGRATE))
+
+    def _run(self, fn: Any) -> Any:
+        """Borrow a pooled connection, run `fn(cursor)`, retry transient errors.
+
+        `fn` receives a cursor and returns whatever the caller needs (e.g. a
+        fetched row). Only `psycopg.OperationalError` (dropped/again-later
+        connections) is retried; logic errors propagate immediately.
+        """
+        last_exc: Optional[Exception] = None
+        for attempt in range(self._max_retries):
+            try:
+                with self._pool.connection() as conn:
+                    with conn.cursor() as cur:
+                        return fn(cur)
+            except self._psycopg.OperationalError as exc:
+                last_exc = exc
+                if attempt == self._max_retries - 1:
+                    break
+                time.sleep(self._retry_backoff * (2 ** attempt))
+        raise last_exc  # type: ignore[misc]
 
     def put(self, item: MemoryItem) -> None:
-        self._conn.execute(
-            """
-            INSERT INTO memories
-                (id, text, metadata, embedding, created_at, last_accessed_at,
-                 access_count, salience, status, superseded_by, expires_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET
-                text=excluded.text,
-                metadata=excluded.metadata,
-                embedding=excluded.embedding,
-                created_at=excluded.created_at,
-                last_accessed_at=excluded.last_accessed_at,
-                access_count=excluded.access_count,
-                salience=excluded.salience,
-                status=excluded.status,
-                superseded_by=excluded.superseded_by,
-                expires_at=excluded.expires_at
-            """,
-            (
-                item.id,
-                item.text,
-                self._Json(item.metadata),
-                self._Json(item.embedding),
-                item.created_at,
-                item.last_accessed_at,
-                item.access_count,
-                item.salience,
-                item.status.value,
-                item.superseded_by,
-                item.expires_at,
-            ),
+        self._run(
+            lambda cur: cur.execute(
+                """
+                INSERT INTO memories
+                    (id, text, namespace, metadata, embedding, created_at,
+                     last_accessed_at, access_count, salience, status,
+                     superseded_by, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    text=EXCLUDED.text,
+                    namespace=EXCLUDED.namespace,
+                    metadata=EXCLUDED.metadata,
+                    embedding=EXCLUDED.embedding,
+                    created_at=EXCLUDED.created_at,
+                    last_accessed_at=EXCLUDED.last_accessed_at,
+                    access_count=EXCLUDED.access_count,
+                    salience=EXCLUDED.salience,
+                    status=EXCLUDED.status,
+                    superseded_by=EXCLUDED.superseded_by,
+                    expires_at=EXCLUDED.expires_at
+                """,
+                (
+                    item.id,
+                    item.text,
+                    item.namespace,
+                    self._Json(item.metadata),
+                    self._Json(item.embedding),
+                    item.created_at,
+                    item.last_accessed_at,
+                    item.access_count,
+                    item.salience,
+                    item.status.value,
+                    item.superseded_by,
+                    item.expires_at,
+                ),
+            )
         )
 
     def get(self, memory_id: str) -> Optional[MemoryItem]:
-        row = self._conn.execute(
-            "SELECT * FROM memories WHERE id = %s", (memory_id,)
-        ).fetchone()
+        row = self._run(
+            lambda cur: cur.execute(
+                "SELECT * FROM memories WHERE id = %s", (memory_id,)
+            ).fetchone()
+        )
         return self._row_to_item(row) if row else None
 
     def delete(self, memory_id: str) -> None:
-        self._conn.execute("DELETE FROM memories WHERE id = %s", (memory_id,))
-        self._conn.execute("DELETE FROM events WHERE memory_id = %s", (memory_id,))
+        def _delete(cur: Any) -> None:
+            cur.execute("DELETE FROM memories WHERE id = %s", (memory_id,))
+            cur.execute("DELETE FROM events WHERE memory_id = %s", (memory_id,))
+
+        self._run(_delete)
 
     def all(self) -> list[MemoryItem]:
-        rows = self._conn.execute("SELECT * FROM memories").fetchall()
+        rows = self._run(lambda cur: cur.execute("SELECT * FROM memories").fetchall())
         return [self._row_to_item(r) for r in rows]
 
     def append_event(self, event: TraceEvent) -> None:
         memory_id = event.data.get("memory_id", "")
-        self._conn.execute(
-            "INSERT INTO events (memory_id, kind, at, detail, data) VALUES (%s, %s, %s, %s, %s)",
-            (memory_id, event.kind, event.at, event.detail, self._Json(event.data)),
+        self._run(
+            lambda cur: cur.execute(
+                "INSERT INTO events (memory_id, kind, at, detail, data) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (memory_id, event.kind, event.at, event.detail, self._Json(event.data)),
+            )
         )
 
     def events_for(self, memory_id: str) -> list[TraceEvent]:
-        rows = self._conn.execute(
-            "SELECT * FROM events WHERE memory_id = %s ORDER BY seq ASC", (memory_id,)
-        ).fetchall()
+        rows = self._run(
+            lambda cur: cur.execute(
+                "SELECT * FROM events WHERE memory_id = %s ORDER BY seq ASC",
+                (memory_id,),
+            ).fetchall()
+        )
         return [
             TraceEvent(kind=r["kind"], at=r["at"], detail=r["detail"], data=r["data"])
             for r in rows
         ]
 
     def close(self) -> None:
-        self._conn.close()
+        self._pool.close()
 
     @staticmethod
     def _row_to_item(row: dict[str, Any]) -> MemoryItem:
         return MemoryItem(
             id=row["id"],
             text=row["text"],
+            namespace=row.get("namespace", "default"),
             metadata=row["metadata"],
             embedding=row["embedding"],
             created_at=row["created_at"],
