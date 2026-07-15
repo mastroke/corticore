@@ -29,6 +29,13 @@ class MemoryItem:
 
     id: str
     text: str
+    namespace: str = "default"
+    """Logical partition for multi-user/multi-agent isolation.
+
+    Memories in different namespaces never surface in each other's `recall()`
+    results and are never consolidated together by `reflect()`. Defaults to
+    `"default"`, so single-tenant, zero-config usage is unaffected.
+    """
     metadata: dict[str, Any] = field(default_factory=dict)
     embedding: list[float] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
