@@ -120,6 +120,21 @@ python orchestrate/check_new_papers.py           # real network check, no API ke
 python orchestrate/run_cloud_agent.py --dry-run  # prints the prompt, doesn't launch anything
 ```
 
+## Memory types
+
+Optionally tag a memory's cognitive category — `semantic` (facts),
+`episodic` (events), or `procedural` (how-to) — and filter recall by it. This
+is a convention over `metadata`, so untyped memories are unaffected.
+
+```python
+from corticore import MemoryType
+
+mem.remember("Paris is the capital of France", memory_type=MemoryType.SEMANTIC)
+mem.remember("to deploy, run make deploy", memory_type=MemoryType.PROCEDURAL)
+
+mem.recall("deploy", filters={"memory_type": "procedural"})
+```
+
 ## Backup and migration
 
 Export a store to JSON Lines and import it back, for backups, moving between
