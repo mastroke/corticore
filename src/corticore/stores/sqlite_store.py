@@ -14,31 +14,7 @@ from typing import Optional
 
 from corticore.core.types import MemoryItem, MemoryStatus, TraceEvent
 from corticore.stores.base import MemoryStore
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS memories (
-    id TEXT PRIMARY KEY,
-    text TEXT NOT NULL,
-    metadata TEXT NOT NULL,
-    embedding TEXT NOT NULL,
-    created_at REAL NOT NULL,
-    last_accessed_at REAL NOT NULL,
-    access_count INTEGER NOT NULL,
-    salience REAL NOT NULL,
-    status TEXT NOT NULL,
-    superseded_by TEXT,
-    expires_at REAL
-);
-
-CREATE TABLE IF NOT EXISTS events (
-    seq INTEGER PRIMARY KEY AUTOINCREMENT,
-    memory_id TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    at REAL NOT NULL,
-    detail TEXT NOT NULL,
-    data TEXT NOT NULL
-);
-"""
+from corticore.stores.migrations import apply_migrations
 
 
 class SQLiteStore(MemoryStore):
@@ -50,8 +26,7 @@ class SQLiteStore(MemoryStore):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        self._conn.executescript(_SCHEMA)
-        self._conn.commit()
+        apply_migrations(self._conn)
 
     def put(self, item: MemoryItem) -> None:
         self._conn.execute(
