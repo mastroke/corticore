@@ -11,6 +11,53 @@ connect.
 from __future__ import annotations
 
 import sqlite3
+from typing import Callable
+
+Migration = Callable[[sqlite3.Connection], None]
+
+
+def _migration_001_base_schema(conn: sqlite3.Connection) -> None:
+    """Create the initial ``memories`` and ``events`` tables.
+
+    Uses ``IF NOT EXISTS`` so it is a no-op on databases that already have
+    these tables from a pre-migrations release of corticore.
+    """
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS memories (
+            id TEXT PRIMARY KEY,
+            text TEXT NOT NULL,
+            metadata TEXT NOT NULL,
+            embedding TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            last_accessed_at REAL NOT NULL,
+            access_count INTEGER NOT NULL,
+            salience REAL NOT NULL,
+            status TEXT NOT NULL,
+            superseded_by TEXT,
+            expires_at REAL
+        );
+
+        CREATE TABLE IF NOT EXISTS events (
+            seq INTEGER PRIMARY KEY AUTOINCREMENT,
+            memory_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            at REAL NOT NULL,
+            detail TEXT NOT NULL,
+            data TEXT NOT NULL
+        );
+        """
+    )
+
+
+# Ordered registry: index i applies the migration that upgrades the schema
+# from version i to version i+1. Append new migrations; never reorder or edit
+# a shipped one.
+MIGRATIONS: list[Migration] = [
+    _migration_001_base_schema,
+]
+
+LATEST_VERSION = len(MIGRATIONS)
 
 
 def get_schema_version(conn: sqlite3.Connection) -> int:
