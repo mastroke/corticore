@@ -86,6 +86,21 @@ class PostgresStore(MemoryStore):
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
 
+        # Transient errors worth retrying: dropped/unavailable connections plus
+        # the serialization/deadlock failures that surface under concurrent
+        # writers. Resolved defensively so a psycopg build lacking a specific
+        # class still constructs a valid exception tuple.
+        errors = psycopg.errors
+        self._retryable: tuple[type[Exception], ...] = tuple(
+            exc
+            for exc in (
+                psycopg.OperationalError,
+                getattr(errors, "SerializationFailure", None),
+                getattr(errors, "DeadlockDetected", None),
+            )
+            if isinstance(exc, type)
+        )
+
         dsn = dsn or os.environ.get("DATABASE_URL")
         if not dsn:
             raise ValueError(
@@ -107,8 +122,8 @@ class PostgresStore(MemoryStore):
         """Borrow a pooled connection, run `fn(cursor)`, retry transient errors.
 
         `fn` receives a cursor and returns whatever the caller needs (e.g. a
-        fetched row). Only `psycopg.OperationalError` (dropped/again-later
-        connections) is retried; logic errors propagate immediately.
+        fetched row). Only transient errors (dropped connections, serialization
+        failures, deadlocks) are retried; logic errors propagate immediately.
         """
         last_exc: Optional[Exception] = None
         for attempt in range(self._max_retries):
@@ -116,7 +131,7 @@ class PostgresStore(MemoryStore):
                 with self._pool.connection() as conn:
                     with conn.cursor() as cur:
                         return fn(cur)
-            except self._psycopg.OperationalError as exc:
+            except self._retryable as exc:
                 last_exc = exc
                 if attempt == self._max_retries - 1:
                     break
