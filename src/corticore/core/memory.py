@@ -13,7 +13,7 @@ import asyncio
 import json
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from corticore.core.config import Config
 from corticore.core.types import (
@@ -71,6 +71,10 @@ from corticore.stores.base import MemoryStore
 from corticore.stores.sqlite_store import SQLiteStore
 from corticore.trace.explain import explain
 
+#: A callback invoked for every trace event corticore records. Use it to ship
+#: memory activity to logs, metrics, or a tracing backend in production.
+EventCallback = Callable[[TraceEvent], None]
+
 
 class Memory:
     """Zero-setup, forgetting-first, inspectable memory for AI agents.
@@ -86,10 +90,12 @@ class Memory:
         store: Optional[MemoryStore] = None,
         embedder: Optional[Embedder] = None,
         config: Optional[Config] = None,
+        on_event: Optional[EventCallback] = None,
     ) -> None:
         self.config = config or Config()
         self.store: MemoryStore = store or SQLiteStore(path)
         self.embedder: Embedder = embedder or LocalEmbedder()
+        self._on_event = on_event
 
     def remember(
         self,
