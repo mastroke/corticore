@@ -113,4 +113,8 @@ def test_main_calls_sdk_and_reports_finished_status(tmp_path, monkeypatch):
     exit_code = main(["--papers-file", str(papers_file), "--repo", "mastroke/corticore"])
 
     assert exit_code == 0
-    assert calls["options"].cloud.repos == ["mastroke/corticore"]
+    # Repos are passed as CloudRepository objects keyed by full URL, not bare
+    # "owner/name" slugs (the SDK requires a url; a slug raises internally).
+    repos = calls["options"].cloud.repos
+    assert len(repos) == 1
+    assert repos[0].url == "https://github.com/mastroke/corticore"

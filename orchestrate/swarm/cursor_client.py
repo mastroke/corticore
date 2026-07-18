@@ -14,6 +14,21 @@ from typing import Optional
 from .runner import CloudRunResult, CloudStartupError
 
 
+def repo_to_url(repo: str) -> str:
+    """Normalize a repo reference into the full git URL the SDK expects.
+
+    `cursor-sdk`'s `CloudRepository` is identified by a `url`, not by
+    `owner/name`. Passing a bare `owner/name` string makes the SDK try
+    `dict("owner/name")` and raise `ValueError: dictionary update sequence
+    element #0 has length 1`. So we accept either an `owner/name` slug or an
+    already-qualified URL and always hand the SDK a real URL.
+    """
+    repo = repo.strip()
+    if repo.startswith("http://") or repo.startswith("https://") or repo.startswith("git@"):
+        return repo
+    return f"https://github.com/{repo}"
+
+
 class CursorCloudClient:
     """Adapts `cursor_sdk.Agent` to the `CloudClient` protocol."""
 
@@ -27,6 +42,7 @@ class CursorCloudClient:
                 Agent,
                 AgentOptions,
                 CloudAgentOptions,
+                CloudRepository,
                 CursorAgentError,
             )
         except ImportError as exc:  # pragma: no cover - needs the extra
@@ -35,7 +51,7 @@ class CursorCloudClient:
                 "pip install -e '.[orchestrate]'",
                 is_retryable=False,
             ) from exc
-        return Agent, AgentOptions, CloudAgentOptions, CursorAgentError
+        return Agent, AgentOptions, CloudAgentOptions, CloudRepository, CursorAgentError
 
     @staticmethod
     def _to_result(result) -> CloudRunResult:
@@ -60,7 +76,10 @@ class CursorCloudClient:
         auto_create_pr: bool,
         timeout_seconds: int,
     ) -> CloudRunResult:
-        Agent, AgentOptions, CloudAgentOptions, CursorAgentError = self._import_sdk()
+        Agent, AgentOptions, CloudAgentOptions, CloudRepository, CursorAgentError = (
+            self._import_sdk()
+        )
+        repos = [CloudRepository(url=repo_to_url(repo))] if repo else []
         try:
             result = Agent.prompt(
                 prompt,
@@ -68,7 +87,7 @@ class CursorCloudClient:
                     api_key=self._api_key,
                     model=model,
                     cloud=CloudAgentOptions(
-                        repos=[repo] if repo else [],
+                        repos=repos,
                         auto_create_pr=auto_create_pr,
                         skip_reviewer_request=self._skip_reviewer_request,
                     ),
@@ -87,7 +106,9 @@ class CursorCloudClient:
         prompt: str,
         timeout_seconds: int,
     ) -> CloudRunResult:
-        Agent, AgentOptions, _CloudAgentOptions, CursorAgentError = self._import_sdk()
+        Agent, AgentOptions, _CloudAgentOptions, _CloudRepository, CursorAgentError = (
+            self._import_sdk()
+        )
         try:
             with Agent.resume(agent_id, AgentOptions(api_key=self._api_key)) as agent:
                 run = agent.send(prompt)

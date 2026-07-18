@@ -90,6 +90,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             Agent,
             AgentOptions,
             CloudAgentOptions,
+            CloudRepository,
             CursorAgentError,
         )
     except ImportError:
@@ -100,6 +101,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
         return 1
 
+    # cursor-sdk identifies a cloud repo by URL, not "owner/name"; passing a
+    # bare slug makes the SDK do dict("owner/name") and raise. Normalize here.
+    repo_url = args.repo
+    if not (repo_url.startswith("http") or repo_url.startswith("git@")):
+        repo_url = f"https://github.com/{repo_url}"
+
     try:
         result = Agent.prompt(
             prompt,
@@ -107,7 +114,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 api_key=api_key,
                 model=args.model,
                 cloud=CloudAgentOptions(
-                    repos=[args.repo],
+                    repos=[CloudRepository(url=repo_url)],
                     auto_create_pr=True,
                     skip_reviewer_request=False,
                 ),

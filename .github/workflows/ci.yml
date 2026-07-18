@@ -32,10 +32,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install with dev + orchestrate extras
+      - name: Install (orchestrate extra only on Python >= 3.10)
+        # cursor-sdk (the orchestrate extra) requires Python >= 3.10, but the
+        # core library supports 3.9. On 3.9 we install just the dev extra and
+        # let the orchestrate-only tests skip via importorskip.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,orchestrate]"
+          if [ "${{ matrix.python-version }}" = "3.9" ]; then
+            pip install -e ".[dev]"
+          else
+            pip install -e ".[dev,orchestrate]"
+          fi
 
       - name: Run tests
         run: pytest -q
