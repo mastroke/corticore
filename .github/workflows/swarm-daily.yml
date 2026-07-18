@@ -19,6 +19,10 @@ on:
         description: "Run thinkers/judge only; never run the code-writing executor"
         type: boolean
         default: false
+      ignore_window:
+        description: "Bypass the daily operating-window check (on-demand smoke test)"
+        type: boolean
+        default: false
 
 concurrency:
   group: swarm-daily
@@ -50,11 +54,14 @@ jobs:
           SWARM_LEDGER_ISSUE: ${{ vars.SWARM_LEDGER_ISSUE }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          ARGS=""
           if [ "${{ inputs.no_write }}" = "true" ]; then
-            python orchestrate/run_swarm.py --no-write
-          else
-            python orchestrate/run_swarm.py
+            ARGS="$ARGS --no-write"
           fi
+          if [ "${{ inputs.ignore_window }}" = "true" ]; then
+            ARGS="$ARGS --ignore-window"
+          fi
+          python orchestrate/run_swarm.py $ARGS
 
       - name: Upload swarm ledger artifact
         if: always()

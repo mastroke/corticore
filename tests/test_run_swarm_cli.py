@@ -39,3 +39,76 @@ def test_live_run_without_api_key_fails_fast():
     pytest.importorskip("yaml")
     exit_code = run_swarm.main([], env={})
     assert exit_code == 1
+
+
+class _ClosedWindow:
+    """Stand-in OperatingWindow that is always closed."""
+
+    def __init__(self, **_kwargs):
+        pass
+
+    def now_local(self, *_a, **_k):
+        return 0
+
+    def is_open(self, _now):
+        return False
+
+    def seconds_until_close(self, _now):
+        return 0.0
+
+
+class _FakeReport:
+    cycle_id = "cycle-test"
+    task = "corticore-maintenance"
+    thinker_outcomes = []
+    proposals = []
+    plan = None
+    skipped_reason = None
+    pr_url = None
+    executor_outcome = None
+
+    def executed(self):
+        return False
+
+
+def _patch_live_deps(monkeypatch, calls):
+    """Stub out every network/side-effecting seam so main() can run offline."""
+    monkeypatch.setattr(run_swarm, "list_available_model_ids", lambda _key: [])
+    monkeypatch.setattr(run_swarm, "validate_models", lambda _req, _avail: None)
+    monkeypatch.setattr(run_swarm, "OperatingWindow", _ClosedWindow)
+    monkeypatch.setattr(run_swarm, "SwarmRunner", lambda _client: object())
+    monkeypatch.setattr(run_swarm, "_build_ledger", lambda _args, _env: object())
+
+    import swarm.cursor_client as cc
+
+    monkeypatch.setattr(cc, "CursorCloudClient", lambda **_k: object())
+
+    class _FakeOrchestrator:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def run_cycle(self, task, deadline):
+            calls["run_cycle"] = {"task": task, "deadline": deadline}
+            return _FakeReport()
+
+    monkeypatch.setattr(run_swarm, "Orchestrator", _FakeOrchestrator)
+
+
+def test_closed_window_skips_without_ignore_flag(monkeypatch):
+    pytest.importorskip("yaml")
+    calls = {}
+    _patch_live_deps(monkeypatch, calls)
+    exit_code = run_swarm.main([], env={"CURSOR_API_KEY": "k"})
+    assert exit_code == 0
+    assert "run_cycle" not in calls  # window closed -> no work started
+
+
+def test_ignore_window_runs_cycle_when_closed(monkeypatch):
+    pytest.importorskip("yaml")
+    calls = {}
+    _patch_live_deps(monkeypatch, calls)
+    exit_code = run_swarm.main(
+        ["--no-write", "--ignore-window"], env={"CURSOR_API_KEY": "k"}
+    )
+    assert exit_code == 0
+    assert "run_cycle" in calls  # bypassed the closed window and ran

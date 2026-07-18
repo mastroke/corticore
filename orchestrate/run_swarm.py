@@ -43,6 +43,11 @@ DEFAULT_CONFIG = ORCHESTRATE_DIR / "swarm.yml"
 DEFAULT_PROMPTS_DIR = ORCHESTRATE_DIR / "prompts"
 DEFAULT_TASK = "corticore-maintenance"
 
+# Deadline used for on-demand smoke tests that bypass the operating window
+# (--ignore-window). Keeps a manual run from hanging past a reasonable cap
+# when there is no window-close time to derive a deadline from.
+IGNORE_WINDOW_DEADLINE_SECONDS = 3600
+
 
 def kill_switch_enabled(env: dict) -> bool:
     """Code-writing runs require SWARM_ENABLED=true (any case)."""
@@ -105,6 +110,11 @@ def main(argv: Optional[list] = None, env: Optional[dict] = None) -> int:
         action="store_true",
         help="Run thinkers/judge for real but never run the code-writing executor.",
     )
+    parser.add_argument(
+        "--ignore-window",
+        action="store_true",
+        help="Bypass the daily operating-window check (manual smoke tests only).",
+    )
     args = parser.parse_args(argv)
 
     config = load_config(args.config)
@@ -142,7 +152,16 @@ def main(argv: Optional[list] = None, env: Optional[dict] = None) -> int:
         end=config.window.end,
     )
     now_local = window.now_local()
-    if not window.is_open(now_local):
+    if window.is_open(now_local):
+        deadline = time.monotonic() + window.seconds_until_close(now_local)
+    elif args.ignore_window:
+        print(
+            f"[swarm] outside operating window "
+            f"({config.window.start}-{config.window.end} {config.window.timezone}), "
+            "but --ignore-window set: running an on-demand cycle."
+        )
+        deadline = time.monotonic() + IGNORE_WINDOW_DEADLINE_SECONDS
+    else:
         print(
             f"[swarm] outside operating window "
             f"({config.window.start}-{config.window.end} {config.window.timezone}); "
@@ -150,7 +169,6 @@ def main(argv: Optional[list] = None, env: Optional[dict] = None) -> int:
         )
         _write_github_output(env, ran="false", reason="outside_window")
         return 0
-    deadline = time.monotonic() + window.seconds_until_close(now_local)
 
     from swarm.cursor_client import CursorCloudClient
 
