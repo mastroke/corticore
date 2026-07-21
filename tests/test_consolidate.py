@@ -75,6 +75,47 @@ def test_reflect_supersedes_conflicting_memories_keeping_higher_salience():
     assert persisted_winner.status == MemoryStatus.ACTIVE
 
 
+def test_reflect_conflict_uses_decayed_salience_not_raw():
+    """A frequently-boosted but long-idle memory loses to a fresher correction."""
+    store = SQLiteStore(":memory:")
+    embedder = LocalEmbedder()
+    now = time.time()
+    shared_vec = [1.0, 0.0]
+
+    stale_high = MemoryItem(
+        id="stale_high",
+        text="alpha bravo charlie",
+        embedding=shared_vec,
+        created_at=now - 10_000,
+        last_accessed_at=now - 10_000,
+        salience=0.95,  # raw salience looks dominant
+    )
+    fresh_low = MemoryItem(
+        id="fresh_low",
+        text="delta echo foxtrot",
+        embedding=shared_vec,
+        created_at=now,
+        last_accessed_at=now,
+        salience=0.5,
+    )
+    store.put(stale_high)
+    store.put(fresh_low)
+
+    config = Config(
+        decay=DecayConfig(half_life_seconds=100, min_salience=0.0),
+        consolidation=ConsolidationConfig(
+            merge_similarity_threshold=0.4,
+            duplicate_similarity_threshold=0.9,
+        ),
+    )
+    report = reflect(store, embedder, config, now=now)
+
+    assert len(report.superseded) == 1
+    loser_id, winner_id = report.superseded[0]
+    assert winner_id == "fresh_low"
+    assert loser_id == "stale_high"
+
+
 def test_reflect_prunes_decayed_memories():
     store = SQLiteStore(":memory:")
     embedder = LocalEmbedder()

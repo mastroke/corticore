@@ -31,10 +31,17 @@ def _similarity(a: MemoryItem, b: MemoryItem) -> float:
     return 0.5 * kw + 0.5 * sim
 
 
-def _winner_loser(a: MemoryItem, b: MemoryItem) -> tuple[MemoryItem, MemoryItem]:
-    """Higher salience wins; ties broken by recency."""
-    if a.salience != b.salience:
-        return (a, b) if a.salience > b.salience else (b, a)
+def _winner_loser(
+    a: MemoryItem,
+    b: MemoryItem,
+    config: Config,
+    now: float,
+) -> tuple[MemoryItem, MemoryItem]:
+    """Higher *decayed* salience wins; ties broken by recency (ADR 0002)."""
+    sa = decayed_salience(a, config.decay, now)
+    sb = decayed_salience(b, config.decay, now)
+    if sa != sb:
+        return (a, b) if sa > sb else (b, a)
     return (a, b) if a.created_at >= b.created_at else (b, a)
 
 
@@ -66,7 +73,7 @@ def reflect(
             if sim < config.consolidation.merge_similarity_threshold:
                 continue
 
-            winner, loser = _winner_loser(a, b)
+            winner, loser = _winner_loser(a, b, config, now)
             is_duplicate = sim >= config.consolidation.duplicate_similarity_threshold
 
             loser.status = MemoryStatus.MERGED if is_duplicate else MemoryStatus.SUPERSEDED
