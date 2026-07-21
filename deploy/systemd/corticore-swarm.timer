@@ -1,0 +1,16 @@
+[Unit]
+Description=Run the corticore local swarm daily at 04:00 Asia/Kolkata
+Documentation=file://%h/Desktop/github/corticore/deploy/systemd/README.md
+
+[Timer]
+# 04:00 in Asia/Kolkata. systemd interprets timezone-aware OnCalendar when
+# the system timezone is set, or use a UTC equivalent. Prefer explicit TZ:
+# Explicit Asia/Kolkata so the 04:00 slot matches swarm.yml regardless of
+# the host's local timezone (requires systemd with timezone calendar support).
+OnCalendar=*-*-* 04:00:00 Asia/Kolkata
+# If the machine was off at 04:00, run once soon after login/boot.
+Persistent=true
+Unit=corticore-swarm.service
+
+[Install]
+WantedBy=timers.target

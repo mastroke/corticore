@@ -1,0 +1,12 @@
+[Unit]
+Description=Send corticore swarm Telegram digest daily at 09:30 Asia/Kolkata
+Documentation=file://%h/Desktop/github/corticore/deploy/systemd/README.md
+
+[Timer]
+OnCalendar=*-*-* 09:30:00 Asia/Kolkata
+# If the laptop was off at 09:30, send once after the next boot/login.
+Persistent=true
+Unit=corticore-swarm-report.service
+
+[Install]
+WantedBy=timers.target

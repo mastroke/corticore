@@ -1,0 +1,23 @@
+[Unit]
+Description=corticore local Composer-2.5 swarm (daily maintenance loop)
+Documentation=file://%h/Desktop/github/corticore/deploy/systemd/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# WorkingDirectory is the *source* install of corticore (orchestrate scripts).
+# Agents edit a separate dedicated clone under ~/.local/share/corticore-swarm/.
+WorkingDirectory=%h/Desktop/github/corticore
+Environment=SWARM_ENABLED=true
+EnvironmentFile=-%h/.config/corticore-swarm/env
+# Prefer the project venv if present; fall back to python3.
+# --catch-up: if the laptop woke after 09:00 and today's stamp is missing,
+# still run a bounded loop so you do not have to start it by hand.
+ExecStart=/bin/bash -lc 'if [ -x .venv/bin/python ]; then PY=.venv/bin/python; else PY=python3; fi; exec "$PY" orchestrate/run_swarm.py --runtime local --loop --catch-up'
+Nice=10
+# Hard cap past the 5h operating window / catch-up budget.
+TimeoutStartSec=6h
+
+[Install]
+WantedBy=default.target

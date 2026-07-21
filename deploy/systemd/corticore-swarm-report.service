@@ -1,0 +1,16 @@
+[Unit]
+Description=corticore daily swarm Telegram report (09:30 Asia/Kolkata)
+Documentation=file://%h/Desktop/github/corticore/deploy/systemd/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Desktop/github/corticore
+EnvironmentFile=-%h/.config/corticore-swarm/env
+ExecStart=/bin/bash -lc 'if [ -x .venv/bin/python ]; then PY=.venv/bin/python; else PY=python3; fi; exec "$PY" orchestrate/report_daily.py'
+Nice=10
+TimeoutStartSec=5m
+
+[Install]
+WantedBy=default.target
