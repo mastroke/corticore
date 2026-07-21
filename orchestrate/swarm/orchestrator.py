@@ -80,6 +80,13 @@ class Orchestrator:
             "task": task.name,
             "task_description": task.description,
             "repo": task.repo,
+            "budget": {
+                "max_commits_per_cycle": self._config.budget.max_commits_per_cycle,
+                "daily_commit_ceiling": self._config.budget.daily_commit_ceiling,
+            },
+            # Scout inputs (paths relative to the checkout root).
+            "competitors_file": "orchestrate/competitors.yml",
+            "papers_file": "research/papers.yaml",
         }
 
     def _prompt_for(self, role: RoleConfig, context: Dict, schema_hint=None) -> str:
