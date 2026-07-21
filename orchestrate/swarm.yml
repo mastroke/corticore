@@ -1,47 +1,61 @@
 # corticore agent-swarm registry.
 #
-# The daily scheduler (`.github/workflows/swarm-daily.yml` ->
-# `orchestrate/run_swarm.py`) reads this file. It defines the operating
-# window, hard cost caps, the role -> model -> prompt mapping, and the tasks
-# the swarm may pick up. See research/design/adr/0006-agent-swarm-orchestration.md.
+# The local scheduler (`deploy/systemd/corticore-swarm.timer` ->
+# `orchestrate/run_swarm.py --runtime local --loop`) and the optional cloud
+# workflow both read this file. It defines the operating window, hard cost
+# caps, the role -> model -> prompt mapping, and the tasks the swarm may pick
+# up. See research/design/adr/0006-agent-swarm-orchestration.md.
 #
 # IMPORTANT - model ids are validated against `Cursor.models.list()` at
 # pre-flight and the run fails closed if any id is not available to the
 # account. Confirm the exact ids your account exposes (they can differ from
 # the display names) and update `model:` below to match, rather than relying
 # on a silent fallback.
+#
+# Local mode (default for the laptop loop) runs every role as composer-2.5
+# against a dedicated clone and commits directly to main after a green gate.
 
 window:
   timezone: Asia/Kolkata
   start: "04:00"
   end: "09:00"
 
+# Friday in the window timezone: bump version + CHANGELOG and push so
+# `.github/workflows/release.yml` can publish.
+release:
+  weekday: Friday  # Python calendar day name
+
 budget:
   # Thinkers run in parallel up to this many at once.
   max_parallel_thinkers: 3
-  # At most one code-changing task per daily cycle (keeps blast radius small).
+  # At most one code-changing task per cycle (keeps blast radius small).
   max_code_changing_tasks_per_run: 1
-  # Absolute cap on cloud runs launched per cycle (defence against a loop).
+  # Absolute cap on cloud/local runs launched per cycle (defence against a loop).
   max_total_runs_per_cycle: 8
+  # Soft daily ceiling: stop starting new cycles once this many commits landed
+  # today. Aspirational, never padded - quality over count.
+  daily_commit_ceiling: 40
+  # Soft per-cycle commit cap the executor is asked to stay under.
+  max_commits_per_cycle: 5
 
 roles:
-  # --- read-only thinkers (GPT 5.6 Sol class reasoning) ---------------
+  # --- read-only thinkers ------------------------------------------------
   maintenance_scout:
-    model: gpt-5.6-sol
+    model: composer-2.5
     prompt_file: swarm/maintenance_scout.md
     can_write: false
     timeout_seconds: 1800
     max_retries: 2
 
   research_scout:
-    model: gpt-5.6-sol
+    model: composer-2.5
     prompt_file: swarm/research_scout.md
     can_write: false
     timeout_seconds: 1800
     max_retries: 2
 
   release_risk_critic:
-    model: gpt-5.6-sol
+    model: composer-2.5
     prompt_file: swarm/release_risk_critic.md
     can_write: false
     timeout_seconds: 1800
@@ -49,35 +63,37 @@ roles:
 
   # --- read-only judge ------------------------------------------------
   judge:
-    model: gpt-5.6-sol
+    model: composer-2.5
     prompt_file: swarm/judge.md
     can_write: false
     timeout_seconds: 1800
     max_retries: 1
 
-  # --- the single code-writing executor (Composer) --------------------
+  # --- the single code-writing executor --------------------------------
+  # Local mode: commits on the dedicated clone; the orchestrator verifies
+  # and pushes. auto_create_pr stays false (direct-to-main).
   executor:
     model: composer-2.5
     prompt_file: swarm/executor.md
     can_write: true
-    auto_create_pr: true
+    auto_create_pr: false
     timeout_seconds: 5400
     max_retries: 1
 
-  # --- independent blind verifier (used by the weekend workflow) ------
+  # --- independent blind verifier ---------------------------------------
   verifier:
-    model: gpt-5.6-sol
+    model: composer-2.5
     prompt_file: swarm/verifier.md
     can_write: false
     timeout_seconds: 3600
     max_retries: 1
 
-  # --- Friday release manager (used by the release workflow) ----------
+  # --- Friday release manager -------------------------------------------
   release_manager:
     model: composer-2.5
     prompt_file: swarm/release_manager.md
     can_write: true
-    auto_create_pr: true
+    auto_create_pr: false
     timeout_seconds: 3600
     max_retries: 1
 
@@ -85,8 +101,11 @@ tasks:
   - name: corticore-maintenance
     description: >-
       Keep corticore healthy and release-ready: triage CI/test/packaging
-      health first, then bounded, genuinely-valuable improvements. One
-      scoped PR per cycle, never a broad rewrite.
+      health first, then bounded, genuinely-valuable improvements. Prefer
+      many small, self-contained commits over one large change. Never pad
+      commit counts with empty or cosmetic noise. When no new paper/note is
+      ready to adopt, the research scout must fall back to studying peers in
+      orchestrate/competitors.yml and propose a smart, ADR-compatible port.
     repo: mastroke/corticore
     priority: 10
     thinker_roles: [maintenance_scout, research_scout, release_risk_critic]

@@ -46,6 +46,27 @@ def test_parse_valid_config():
     assert config.required_model_ids() == ["composer-2.5", "gpt-5.6-sol"]
     assert config.get_task("t1").repo == "o/r"
     assert config.enabled_tasks()[0].name == "t1"
+    assert config.budget.daily_commit_ceiling == 40
+    assert config.budget.max_commits_per_cycle == 5
+    assert config.release.weekday == "Friday"
+
+
+def test_budget_ceiling_override():
+    data = _valid_data()
+    data["budget"]["daily_commit_ceiling"] = 30
+    data["budget"]["max_commits_per_cycle"] = 3
+    data["release"] = {"weekday": "Thursday"}
+    config = parse_config(data)
+    assert config.budget.daily_commit_ceiling == 30
+    assert config.budget.max_commits_per_cycle == 3
+    assert config.release.weekday == "Thursday"
+
+
+def test_invalid_release_weekday_fails():
+    data = _valid_data()
+    data["release"] = {"weekday": "Funday"}
+    with pytest.raises(ConfigError, match="release.weekday"):
+        parse_config(data)
 
 
 def test_enabled_tasks_sorted_by_priority():
@@ -115,3 +136,7 @@ def test_real_swarm_yml_loads_and_validates():
     assert task.executor_role == "executor"
     assert config.roles["executor"].can_write is True
     assert config.roles["maintenance_scout"].can_write is False
+    # Local Composer-2.5 swarm: every role uses the same model id.
+    assert config.required_model_ids() == ["composer-2.5"]
+    assert config.budget.daily_commit_ceiling == 40
+    assert config.roles["executor"].auto_create_pr is False

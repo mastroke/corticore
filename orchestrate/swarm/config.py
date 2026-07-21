@@ -49,6 +49,10 @@ class BudgetConfig:
     max_parallel_thinkers: int = 3
     max_code_changing_tasks_per_run: int = 1
     max_total_runs_per_cycle: int = 12
+    # Soft daily ceiling for local loop mode (cap, not a quota to pad toward).
+    daily_commit_ceiling: int = 40
+    # Soft per-cycle commit hint for the local executor prompt.
+    max_commits_per_cycle: int = 5
 
     def __post_init__(self) -> None:
         if self.max_parallel_thinkers < 1:
@@ -57,6 +61,32 @@ class BudgetConfig:
             raise ConfigError("budget.max_code_changing_tasks_per_run must be >= 0")
         if self.max_total_runs_per_cycle < 1:
             raise ConfigError("budget.max_total_runs_per_cycle must be >= 1")
+        if self.daily_commit_ceiling < 1:
+            raise ConfigError("budget.daily_commit_ceiling must be >= 1")
+        if self.max_commits_per_cycle < 1:
+            raise ConfigError("budget.max_commits_per_cycle must be >= 1")
+
+
+@dataclass(frozen=True)
+class ReleaseConfig:
+    """When the local loop should cut a version bump on main."""
+
+    weekday: str = "Friday"  # Python calendar day name, e.g. Friday
+
+    def __post_init__(self) -> None:
+        valid = {
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        }
+        if self.weekday not in valid:
+            raise ConfigError(
+                f"release.weekday must be one of {sorted(valid)}, got {self.weekday!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -90,6 +120,7 @@ class SwarmConfig:
     budget: BudgetConfig
     roles: Dict[str, RoleConfig]
     tasks: List[TaskConfig]
+    release: ReleaseConfig = field(default_factory=ReleaseConfig)
 
     def enabled_tasks(self) -> List[TaskConfig]:
         """Enabled tasks, highest priority first (lower number = higher)."""
@@ -178,7 +209,12 @@ def parse_config(data: dict) -> SwarmConfig:
             budget_raw.get("max_code_changing_tasks_per_run", 1)
         ),
         max_total_runs_per_cycle=int(budget_raw.get("max_total_runs_per_cycle", 12)),
+        daily_commit_ceiling=int(budget_raw.get("daily_commit_ceiling", 40)),
+        max_commits_per_cycle=int(budget_raw.get("max_commits_per_cycle", 5)),
     )
+
+    release_raw = data.get("release", {}) or {}
+    release = ReleaseConfig(weekday=str(release_raw.get("weekday", "Friday")))
 
     roles_raw = _require(data, "roles", "swarm config")
     if not isinstance(roles_raw, dict):
@@ -216,7 +252,9 @@ def parse_config(data: dict) -> SwarmConfig:
             )
         )
 
-    config = SwarmConfig(window=window, budget=budget, roles=roles, tasks=tasks)
+    config = SwarmConfig(
+        window=window, budget=budget, roles=roles, tasks=tasks, release=release
+    )
     config.validate()
     return config
 
