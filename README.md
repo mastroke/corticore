@@ -260,79 +260,79 @@ corrupting it — upgrade corticore in that case.
 ## Autonomous agent swarm
 
 On top of the single research loop, corticore runs a small **swarm** of Cursor
-cloud agents that operates every morning (04:00-09:00 Asia/Kolkata) and keeps
-the project healthy and release-ready. See
-[ADR 0006](research/design/adr/0006-agent-swarm-orchestration.md) for the full
-reasoning; the code is under `orchestrate/swarm/` and `orchestrate/run_swarm.py`.
+agents (all **composer-2.5**) that operates every morning (04:00–09:00
+Asia/Kolkata) and keeps the project healthy and release-ready. The primary
+runtime is **local** (your laptop, via a systemd user timer); an optional
+cloud path remains for CI smoke tests. See
+[ADR 0006](research/design/adr/0006-agent-swarm-orchestration.md) and
+[`deploy/systemd/README.md`](deploy/systemd/README.md).
 
-How a daily cycle works:
+How a daily local loop works:
 
-- Parallel **thinker** agents (GPT-class reasoning) scout for maintenance,
-  research, and release-risk work and each propose bounded tasks.
-- A read-only **judge** picks at most one proposal for the day.
-- A single **executor** (Composer) - the only role allowed to write code -
-  implements that one scoped change and opens one PR. It never pushes to `main`.
+- Parallel **thinker** agents scout for maintenance, research, and release-risk
+  work and each propose bounded tasks.
+- A read-only **judge** picks at most one proposal per cycle.
+- A single **executor** - the only role allowed to write code - implements that
+  scoped change as several small commits on a *dedicated* clone
+  (`~/.local/share/corticore-swarm/checkout`). It never pushes.
+- The orchestrator runs `pytest` + the eval gate; green HEAD is pushed to
+  `origin/main`, red HEAD is hard-reset. Cycles repeat until the window closes
+  or the soft daily commit ceiling (default 40) is hit. Quality over count —
+  never pad.
 - Every step is written to a durable ledger so interrupted work is *resumed*,
   not repeated.
 
-Separately, a **weekend verifier** re-checks the week's merged `main` from a
-clean clone with no planner context (tests + eval gate + clean-room wheel
-import) and files a `release-blocker` issue if anything fails.
-
 ### Release cadence (automatic, gated)
 
-- **Thursday** (`release-prep.yml`) computes the semantic bump deterministically
-  from merged change labels (`breaking`→major, `feature`→minor, `fix`→patch),
-  rolls `CHANGELOG.md`, and opens an auto-merge `Release <version>` PR.
-- **Friday** (`release.yml`) publishes only when *every* gate clears: kill
-  switch on, CI green, verifier green, CHANGELOG entry present, clean history,
-  no open `release-blocker` issues, no existing tag, and PyPI Trusted
-  Publishing configured. Publishing uses OIDC (no API token) and is idempotent.
+- **Friday** (local loop, end of window): bumps `pyproject.toml`, rolls
+  `CHANGELOG.md` Unreleased → dated version, verifies, and pushes to `main`.
+- That push triggers `.github/workflows/release.yml`, which publishes to PyPI
+  via Trusted Publishing (OIDC) only when *every* gate clears:
+  `RELEASE_ENABLED=true`, CI green, CHANGELOG entry present, no open
+  `release-blocker` issues, no existing tag. Publishing is idempotent.
 
 ### Kill switches and cost controls
 
-- `SWARM_ENABLED` (repo variable) must be `true` for the executor to write
-  anything; otherwise the swarm only thinks.
-- `RELEASE_ENABLED` (repo variable) must be `true` to publish.
-- `orchestrate/swarm.yml` caps parallel thinkers, code-changing tasks per cycle
-  (default 1), and total runs; `run_swarm.py` refuses to start work outside the
-  operating window and enforces a per-cycle deadline.
+- `SWARM_ENABLED=true` (in `~/.config/corticore-swarm/env` for local, or the
+  GitHub Actions variable for cloud) is required for the executor to write;
+  otherwise the swarm only thinks.
+- `RELEASE_ENABLED` (GitHub repo variable) must be `true` to publish.
+- `orchestrate/swarm.yml` caps parallel thinkers, code-changing tasks per
+  cycle, total runs, and the soft daily commit ceiling; `run_swarm.py` refuses
+  to start work outside the operating window.
 
-### Preview and manual control
+### Preview and local control
 
 ```bash
 pip install -e ".[dev,orchestrate]"
-python orchestrate/run_swarm.py --dry-run        # print every prompt, no API key, no agents
-python orchestrate/run_swarm.py --no-write       # run thinkers/judge for real, never the executor
-python orchestrate/prepare_release.py --dry-run  # show the computed version bump only
+python orchestrate/run_swarm.py --dry-run
+python orchestrate/run_swarm.py --runtime local --no-write --ignore-window --skip-release
+SWARM_ENABLED=true python orchestrate/run_swarm.py --runtime local --loop
+./deploy/systemd/install.sh --enable   # schedule 04:00 Asia/Kolkata
 ```
 
-Each workflow also has a `workflow_dispatch` trigger for manual, on-demand runs.
+### One-time activation (local)
 
-### One-time activation
+1. Put `CURSOR_API_KEY` in the repo `.env` (or create a Cursor API key at
+   [Dashboard → Integrations](https://cursor.com/dashboard/integrations)).
+2. Run `./deploy/systemd/install.sh` once — it seeds the env file, enables
+   user linger, and starts the 04:00 Asia/Kolkata timer. You do **not** need
+   to start the swarm every day. If the laptop wakes after 09:00 with no run
+   yet that day, `--catch-up` still does a bounded loop once.
+3. Ensure SSH push access to `origin/main` from this machine.
+4. For PyPI publish: set GitHub `RELEASE_ENABLED=true` and register this repo
+   as a **PyPI Trusted Publisher**.
 
-The swarm can only be switched on with a few external, one-time steps (not
-doable from a code checkout):
-
-1. Enable **Long running agents** for your Cursor team (Team Settings) and
-   create a least-privilege **service-account** API key with access to the repo.
-2. Add secrets/variables in GitHub (Settings → Secrets and variables → Actions):
-   `CURSOR_API_KEY` (secret); `SWARM_ENABLED`, `RELEASE_ENABLED` (variables);
-   optionally `SWARM_LEDGER_ISSUE` (a tracking issue number for the ledger).
-3. Configure branch protection on `main` requiring the **CI** and **Weekend
-   verifier** checks, and enable auto-merge for the release PR.
-4. Register this repo's release workflow as a **PyPI Trusted Publisher**
-   (there is no `corticore` project on PyPI yet, so do this before the first
-   unattended publish).
+When there is no new paper/note ready, the research scout falls back to
+studying peers in [`orchestrate/competitors.yml`](orchestrate/competitors.yml)
+and proposing a small, ADR-compatible port.
 
 ### Incident recovery
 
-- To stop everything immediately, set `SWARM_ENABLED` and `RELEASE_ENABLED` to
-  `false` - in-flight runs finish, no new work starts, and nothing publishes.
-- A failed release leaves no tag (the tag is created only on the publish path);
-  fix forward and let the next cycle re-run - `skip-existing` and the tag/version
-  checks make re-runs idempotent.
-- Resolve any open `release-blocker` issue before re-enabling releases.
+- To stop everything immediately, set `SWARM_ENABLED=false` in the env file
+  and/or `systemctl --user stop corticore-swarm.timer`.
+- A failed local cycle never reaches `main` (verify-then-push). A failed
+  release publish leaves no tag; fix forward and re-run — checks are idempotent.
 
 ## Project layout
 

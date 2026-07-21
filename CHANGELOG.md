@@ -13,8 +13,24 @@ the change labels merged during the week: any `breaking` -> major, else any
 
 ### Added
 
+- Local Composer-2.5 swarm loop: every role runs as `composer-2.5` via the
+  Cursor SDK local runtime against a dedicated checkout; `run_swarm.py
+  --runtime local --loop` repeats think→judge→execute cycles inside the
+  04:00–09:00 Asia/Kolkata window up to a soft daily commit ceiling, verifies
+  (`pytest` + eval gate) before each push to `main`, and on Friday bumps the
+  version + CHANGELOG to trigger `.github/workflows/release.yml`. Scheduled by
+  a systemd user timer with linger + `--catch-up` so late wakeups still run
+  once (`deploy/systemd/`).
+- Research scout competitor fallback: when no new paper/note is ready,
+  `research_scout` studies peers in `orchestrate/competitors.yml` (mem0,
+  letta, zep, langmem, Awesome-Self-Improving-Agents) and proposes a small,
+  ADR-compatible port (`kind: competitor`).
+- Daily Telegram digest at 09:30 Asia/Kolkata (`orchestrate/report_daily.py`
+  + `corticore-swarm-report.timer`): summarizes today's swarm ledger roles and
+  commits landed on main; credentials via `TELEGRAM_BOT_TOKEN` /
+  `TELEGRAM_CHAT_ID` in `~/.config/corticore-swarm/env`.
 - Agent-swarm orchestration under `orchestrate/swarm/`: role-separated Cursor
-  Cloud thinkers, a judge, a single code-writing executor, and an independent
+  thinkers, a judge, a single code-writing executor, and an independent
   blind verifier, coordinated by `orchestrate/run_swarm.py` under a daily
   operating window, fail-closed model validation, a durable run ledger, and
   hard cost caps (see `research/design/adr/0006-agent-swarm-orchestration.md`).
