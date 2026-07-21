@@ -105,6 +105,11 @@ class Orchestrator:
         if not role_names:
             return []
         max_workers = max(1, self._config.budget.max_parallel_thinkers)
+        # Local SDK bridge is process-global and fights the IDE when launched from
+        # worker threads / the editing workspace. Keep local (or serial) thinkers
+        # on the calling thread.
+        local_runtime = getattr(self._runner._client, "runtime", None) == "local"
+        use_pool = (not local_runtime) and max_workers > 1 and len(role_names) > 1
 
         def _run_one(role_name: str) -> RoleOutcome:
             role = self._role(role_name)
@@ -114,9 +119,15 @@ class Orchestrator:
             return self._runner.run_role(role, prompt, task.repo, deadline=deadline)
 
         outcomes: List[RoleOutcome] = []
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(role_names))) as pool:
-            for outcome in pool.map(_run_one, role_names):
-                outcomes.append(outcome)
+        if use_pool:
+            with ThreadPoolExecutor(
+                max_workers=min(max_workers, len(role_names))
+            ) as pool:
+                for outcome in pool.map(_run_one, role_names):
+                    outcomes.append(outcome)
+        else:
+            for role_name in role_names:
+                outcomes.append(_run_one(role_name))
 
         for outcome in outcomes:
             self._record(

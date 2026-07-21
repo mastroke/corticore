@@ -175,12 +175,15 @@ class CursorLocalClient:
         del repo, auto_create_pr  # not used in local mode
         Agent, AgentOptions, _, _, LocalAgentOptions, CursorAgentError = _import_sdk()
         with _LOCAL_BRIDGE_LOCK:
-            # Also chdir: some SDK bridge builds ignore LocalAgentOptions.cwd and
-            # inherit the process workspace (saw Desktop/… instead of the
-            # dedicated checkout). Hold the lock for the whole call.
-            previous = os.getcwd()
+            # Stay in the dedicated checkout for the whole call (and leave the
+            # process there). Restoring a prior cwd made the next launch inherit
+            # the editing workspace and collide with the IDE bridge.
+            os.chdir(self._cwd)
+            print(
+                f"[cursor-local] launching {model} in {self._cwd}",
+                flush=True,
+            )
             try:
-                os.chdir(self._cwd)
                 result = Agent.prompt(
                     prompt,
                     AgentOptions(
@@ -190,12 +193,14 @@ class CursorLocalClient:
                     ),
                 )
             except CursorAgentError as exc:
+                print(
+                    f"[cursor-local] FAILED: {getattr(exc, 'message', exc)}",
+                    flush=True,
+                )
                 raise CloudStartupError(
                     getattr(exc, "message", str(exc)),
                     is_retryable=bool(getattr(exc, "is_retryable", False)),
                 ) from exc
-            finally:
-                os.chdir(previous)
         return _to_result(result)
 
     def resume(
@@ -206,9 +211,8 @@ class CursorLocalClient:
     ) -> CloudRunResult:
         Agent, AgentOptions, _, _, _, CursorAgentError = _import_sdk()
         with _LOCAL_BRIDGE_LOCK:
-            previous = os.getcwd()
+            os.chdir(self._cwd)
             try:
-                os.chdir(self._cwd)
                 with Agent.resume(
                     agent_id, AgentOptions(api_key=self._api_key)
                 ) as agent:
@@ -219,8 +223,6 @@ class CursorLocalClient:
                     getattr(exc, "message", str(exc)),
                     is_retryable=bool(getattr(exc, "is_retryable", False)),
                 ) from exc
-            finally:
-                os.chdir(previous)
         merged = _to_result(result)
         return CloudRunResult(
             agent_id=agent_id,

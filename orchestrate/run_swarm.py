@@ -497,6 +497,11 @@ def main(argv: Optional[list] = None, env: Optional[dict] = None) -> int:
     if args.runtime == "local":
         checkout = Path(args.checkout).expanduser()
         ensure_checkout(checkout)
+        # Bind this process to the dedicated checkout before any SDK call so the
+        # local bridge's --workspace is not the human editing tree (which races
+        # the IDE and shows up as ConnectError: Connection refused).
+        if checkout.is_dir():
+            os.chdir(checkout)
         client = build_client("local", api_key, cwd=checkout)
     else:
         client = build_client("cloud", api_key)
