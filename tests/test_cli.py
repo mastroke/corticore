@@ -47,3 +47,9 @@ def test_why_prints_trace(db, capsys):
     assert main(["--db", db, "why", mid]) == 0
     out = capsys.readouterr().out
     assert "stored" in out
+
+
+def test_why_missing_memory_exits_nonzero(db, capsys):
+    assert main(["--db", db, "why", "does-not-exist"]) == 1
+    err = capsys.readouterr().err
+    assert "memory not found" in err

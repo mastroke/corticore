@@ -17,6 +17,7 @@ import sys
 from typing import Optional, Sequence
 
 from corticore.core.memory import Memory
+from corticore.trace.explain import MemoryNotFoundError
 
 
 def _truncate(text: str, width: int = 70) -> str:
@@ -59,7 +60,11 @@ def cmd_recall(mem: Memory, args: argparse.Namespace) -> int:
 
 def cmd_why(mem: Memory, args: argparse.Namespace) -> int:
     """Print the full trace (why a memory exists / how it changed)."""
-    trace = mem.why(args.memory_id)
+    try:
+        trace = mem.why(args.memory_id)
+    except MemoryNotFoundError:
+        print(f"memory not found: {args.memory_id}", file=sys.stderr)
+        return 1
     if not trace.events:
         print(f"(no trace for {args.memory_id})")
         return 0
