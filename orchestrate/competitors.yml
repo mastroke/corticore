@@ -1,0 +1,47 @@
+# Competitor / peer repositories the research scout may study when there is
+# no new paper or tracked research ready to adopt.
+#
+# Rules for the scout (also in prompts/swarm/research_scout.md):
+# - Treat these as *inspiration*, never as code to copy wholesale.
+# - ADR 0001 (zero-setup default) and ADR 0002 (forgetting-first) always win.
+# - Propose only small, ADR-compatible ports that pass the eval gate.
+# - Prefer ideas that close a real corticore gap over novelty for its own sake.
+#
+# Update this list when you find a peer worth watching; keep it short.
+
+competitors:
+  - name: mem0
+    repo: mem0ai/mem0
+    url: https://github.com/mem0ai/mem0
+    focus: >-
+      Production memory layer for AI apps; extraction, update, and retrieval
+      patterns. Study API shape and memory lifecycle, not their cloud stack.
+
+  - name: letta
+    repo: letta-ai/letta
+    url: https://github.com/letta-ai/letta
+    focus: >-
+      Stateful agents with core/archival memory (MemGPT lineage). Study
+      memory hierarchy and compaction ideas that fit SQLite-first design.
+
+  - name: zep
+    repo: getzep/zep
+    url: https://github.com/getzep/zep
+    focus: >-
+      Long-term memory for LLM apps; session/fact graphs. Look for
+      summarization and retrieval heuristics portable without a graph DB.
+
+  - name: langmem
+    repo: langchain-ai/langmem
+    url: https://github.com/langchain-ai/langmem
+    focus: >-
+      LangGraph memory tooling. Extract store/reflect patterns that stay
+      framework-agnostic.
+
+  - name: awesome-self-improving-agents
+    repo: FrontisAI/Awesome-Self-Improving-Agents
+    url: https://github.com/FrontisAI/Awesome-Self-Improving-Agents
+    focus: >-
+      Curated index of self-improving agent papers and projects. Use as a
+      discovery feed for new peers and papers; never treat listed projects
+      as authorities over corticore ADRs.

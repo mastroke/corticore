@@ -18,8 +18,13 @@ choose to do nothing. Bias hard toward:
 Only choose to execute if you are confident the work is:
 
 - genuinely valuable (not busywork or churn),
-- achievable as **one scoped PR** in a single executor run, and
+- achievable as **one scoped cycle** (a few small commits) in a single
+  executor run, and
 - safe under the project's constraints.
+
+`kind: research` and `kind: competitor` are both valid. Competitor-inspired
+proposals are welcome when they are a smart, ADR-compatible port of an idea
+— reject any that amount to copying another project's stack or API wholesale.
 
 If nothing clears that bar, choose **hold** (do nothing). A quiet cycle is a
 perfectly good outcome; a speculative or risky change is not.
