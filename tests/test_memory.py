@@ -104,6 +104,17 @@ def test_remember_with_expires_at_is_force_forgotten_on_reflect(mem):
     assert any(ev.kind == "expired" for ev in trace.events)
 
 
+def test_recall_hides_expired_memories_before_reflect(mem):
+    now = time.time()
+    mem.remember("the promo code is SAVE10", expires_at=now + 3600)
+    mem.remember("the promo code is OLD99", expires_at=now - 1)
+
+    results = mem.recall("promo code", k=5)
+    texts = " ".join(r.text for r in results)
+    assert "SAVE10" in texts
+    assert "OLD99" not in texts
+
+
 def test_remember_without_expires_at_survives_reflect(mem):
     memory_id = mem.remember("a fact with no deadline")
     mem.reflect()

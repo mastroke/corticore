@@ -66,6 +66,10 @@ def retrieve(
     for item in items:
         if item.status != MemoryStatus.ACTIVE:
             continue
+        # ADR 0003 / Foresight: expired memories must not surface in recall
+        # even before the next reflect() pass force-forgets them.
+        if item.expires_at is not None and item.expires_at <= now:
+            continue
         if namespace is not None and item.namespace != namespace:
             continue
         if not matches_filters(item, filters):
