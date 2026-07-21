@@ -26,8 +26,9 @@ release:
   weekday: Friday  # Python calendar day name
 
 budget:
-  # Thinkers run in parallel up to this many at once.
-  max_parallel_thinkers: 3
+  # Thinkers run in parallel up to this many at once. The local SDK bridge
+  # is serialized in CursorLocalClient anyway; keep this modest.
+  max_parallel_thinkers: 1
   # At most one code-changing task per cycle (keeps blast radius small).
   max_code_changing_tasks_per_run: 1
   # Absolute cap on cloud/local runs launched per cycle (defence against a loop).

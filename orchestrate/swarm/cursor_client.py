@@ -13,10 +13,17 @@ runner's `CloudStartupError` so retry policy has the info it needs.
 
 from __future__ import annotations
 
+import os
+import threading
 from pathlib import Path
 from typing import Optional, Union
 
 from .runner import CloudRunResult, CloudStartupError
+
+# The local SDK bridge is single-process; concurrent Agent.prompt calls from
+# ThreadPoolExecutor thinkers race it into ConnectError. Serialize all local
+# launches through one lock.
+_LOCAL_BRIDGE_LOCK = threading.Lock()
 
 
 def repo_to_url(repo: str) -> str:
@@ -167,20 +174,28 @@ class CursorLocalClient:
     ) -> CloudRunResult:
         del repo, auto_create_pr  # not used in local mode
         Agent, AgentOptions, _, _, LocalAgentOptions, CursorAgentError = _import_sdk()
-        try:
-            result = Agent.prompt(
-                prompt,
-                AgentOptions(
-                    api_key=self._api_key,
-                    model=model,
-                    local=LocalAgentOptions(cwd=self._cwd),
-                ),
-            )
-        except CursorAgentError as exc:
-            raise CloudStartupError(
-                getattr(exc, "message", str(exc)),
-                is_retryable=bool(getattr(exc, "is_retryable", False)),
-            ) from exc
+        with _LOCAL_BRIDGE_LOCK:
+            # Also chdir: some SDK bridge builds ignore LocalAgentOptions.cwd and
+            # inherit the process workspace (saw Desktop/… instead of the
+            # dedicated checkout). Hold the lock for the whole call.
+            previous = os.getcwd()
+            try:
+                os.chdir(self._cwd)
+                result = Agent.prompt(
+                    prompt,
+                    AgentOptions(
+                        api_key=self._api_key,
+                        model=model,
+                        local=LocalAgentOptions(cwd=self._cwd),
+                    ),
+                )
+            except CursorAgentError as exc:
+                raise CloudStartupError(
+                    getattr(exc, "message", str(exc)),
+                    is_retryable=bool(getattr(exc, "is_retryable", False)),
+                ) from exc
+            finally:
+                os.chdir(previous)
         return _to_result(result)
 
     def resume(
@@ -190,15 +205,22 @@ class CursorLocalClient:
         timeout_seconds: int,
     ) -> CloudRunResult:
         Agent, AgentOptions, _, _, _, CursorAgentError = _import_sdk()
-        try:
-            with Agent.resume(agent_id, AgentOptions(api_key=self._api_key)) as agent:
-                run = agent.send(prompt)
-                result = run.wait()
-        except CursorAgentError as exc:
-            raise CloudStartupError(
-                getattr(exc, "message", str(exc)),
-                is_retryable=bool(getattr(exc, "is_retryable", False)),
-            ) from exc
+        with _LOCAL_BRIDGE_LOCK:
+            previous = os.getcwd()
+            try:
+                os.chdir(self._cwd)
+                with Agent.resume(
+                    agent_id, AgentOptions(api_key=self._api_key)
+                ) as agent:
+                    run = agent.send(prompt)
+                    result = run.wait()
+            except CursorAgentError as exc:
+                raise CloudStartupError(
+                    getattr(exc, "message", str(exc)),
+                    is_retryable=bool(getattr(exc, "is_retryable", False)),
+                ) from exc
+            finally:
+                os.chdir(previous)
         merged = _to_result(result)
         return CloudRunResult(
             agent_id=agent_id,

@@ -306,6 +306,10 @@ def _run_local_loop(
     catch_up_deadline = (
         time.monotonic() + CATCH_UP_DEADLINE_SECONDS if catch_up_active else None
     )
+    # Stop burning the day when the local bridge is wedged: N cycles in a row
+    # with zero proposals means thinkers aren't getting through.
+    consecutive_empty = 0
+    max_consecutive_empty = 2
 
     while True:
         now_local = window.now_local()
@@ -356,20 +360,27 @@ def _run_local_loop(
             print(f"[swarm] cycle exited {code}; continuing if window allows.")
 
         # Refresh count after possible push.
+        made_progress = False
         if checkout.exists():
             commits_after = count_commits_today(checkout)
-            total_pushed += max(0, commits_after - commits_before)
+            delta = max(0, commits_after - commits_before)
+            total_pushed += delta
+            if delta > 0:
+                made_progress = True
+
+        if not made_progress:
+            consecutive_empty += 1
+            if consecutive_empty >= max_consecutive_empty:
+                print(
+                    f"[swarm] {consecutive_empty} consecutive cycles with no new "
+                    "commits; stopping loop (bridge or planner likely stuck)."
+                )
+                break
+        else:
+            consecutive_empty = 0
 
         if not args.loop:
             break
-        if args.ignore_window and cycles >= 1:
-            # On-demand ignore-window: one cycle unless --loop is combined with
-            # an open window. If ignore-window + loop, allow multiple but cap
-            # at ceiling; still break after a generous single-shot when window closed.
-            if not window.is_open(window.now_local()):
-                # Allow multiple only while under ceiling; keep going until ceiling
-                # or max_cycles safety.
-                pass
 
         # Safety: absolute cycle cap to prevent runaway if something is wrong.
         if cycles >= commit_ceiling:
