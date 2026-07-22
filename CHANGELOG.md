@@ -11,6 +11,12 @@ the change labels merged during the week: any `breaking` -> major, else any
 
 ## [Unreleased]
 
+### Changed
+
+- Release workflow (`.github/workflows/release.yml`): clean-room wheel install
+  and `import corticore` smoke test after build and before tag push or PyPI
+  publish, mirroring `ci.yml` and `weekend-verifier.yml`.
+
 ### Added
 
 - Local Composer-2.5 swarm loop: every role runs as `composer-2.5` via the
